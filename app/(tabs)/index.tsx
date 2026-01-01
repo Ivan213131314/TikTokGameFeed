@@ -1,6 +1,6 @@
 import { StyleSheet, View, Text, useWindowDimensions, SafeAreaView, FlatList } from 'react-native';
 import { Colors } from '../../src/constants/Colors';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { GameModel } from '../../src/types/GameModel';
 import { GameStorageService } from '../../src/services/GameStorageService';
 import { useFocusEffect } from 'expo-router';
@@ -11,6 +11,13 @@ export default function GameFeedScreen() {
   const { height } = useWindowDimensions();
   const [games, setGames] = useState<GameModel[]>([]);
   const [activePage, setActivePage] = useState(0);
+
+  // Create an "infinite" list by repeating the games multiple times
+  const infiniteGames = useMemo(() => {
+    if (games.length === 0) return [];
+    // Repeat the games list 100 times to simulate infinity
+    return Array(100).fill(games).flat();
+  }, [games]);
 
   const loadGames = async () => {
     await GameStorageService.seedDefaultGames();
@@ -47,19 +54,22 @@ export default function GameFeedScreen() {
   return (
     <View style={styles.container}>
       <FlatList
-        data={games}
+        data={infiniteGames}
         renderItem={({ item, index }) => (
           <View style={[styles.page, { height }]}>
             <GameContainer game={item} isActive={activePage === index} />
           </View>
         )}
-        keyExtractor={(item) => item.id}
-        pagingEnabled
+        keyExtractor={(item, index) => `${item.id}_${index}`}
+        snapToInterval={height}
+        snapToAlignment="start"
+        decelerationRate="fast"
         showsVerticalScrollIndicator={false}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
-        decelerationRate="fast"
-        disableIntervalMomentum
+        initialNumToRender={3}
+        maxToRenderPerBatch={3}
+        windowSize={5}
       />
     </View>
   );

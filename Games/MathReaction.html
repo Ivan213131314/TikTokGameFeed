@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Math Reaction</title>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --accent: #ec4899;
+            --bg-start: #0f172a;
+            --bg-end: #1e293b;
+            --text: #f8fafc;
+            --success: #22c55e;
+            --error: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, var(--bg-start), var(--bg-end));
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* HUD */
+        .hud {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 1.2rem;
+            font-weight: 600;
+            position: relative;
+            z-index: 10;
+        }
+
+        .score-box {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px 16px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            margin-top: 40px;
+            /* Safe area */
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* Timer Bar */
+        .timer-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .timer-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            width: 100%;
+            transform-origin: left;
+            transition: width 0.1s linear;
+        }
+
+        /* Main Game Area */
+        .game-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .equation {
+            font-size: 5rem;
+            font-weight: 800;
+            text-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            margin-bottom: 2rem;
+            opacity: 0;
+            transform: scale(0.8);
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .equation.active {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        /* Buttons Container */
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            padding: 20px;
+            width: 100%;
+            height: 250px;
+            /* Fixed height for consistent tap area */
+            margin-bottom: 40px;
+            /* Bottom safe area */
+        }
+
+        .btn-option {
+            background: rgba(255, 255, 255, 0.08);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            color: white;
+            font-size: 2.5rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-option:active {
+            transform: scale(0.95);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        /* Feedback Effects */
+        .btn-option.correct {
+            background: var(--success);
+            border-color: var(--success);
+            box-shadow: 0 0 30px rgba(34, 197, 94, 0.4);
+        }
+
+        .btn-option.wrong {
+            background: var(--error);
+            border-color: var(--error);
+            box-shadow: 0 0 30px rgba(239, 68, 68, 0.4);
+            animation: shake 0.4s cubic-bezier(.36, .07, .19, .97) both;
+        }
+
+        @keyframes shake {
+
+            10%,
+            90% {
+                transform: translate3d(-1px, 0, 0);
+            }
+
+            20%,
+            80% {
+                transform: translate3d(2px, 0, 0);
+            }
+
+            30%,
+            50%,
+            70% {
+                transform: translate3d(-4px, 0, 0);
+            }
+
+            40%,
+            60% {
+                transform: translate3d(4px, 0, 0);
+            }
+        }
+
+        /* Start / Game Over Screen */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(20px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            text-align: center;
+            transition: opacity 0.3s ease;
+        }
+
+        .overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .title {
+            font-size: 3rem;
+            font-weight: 900;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(to right, #6366f1, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            color: #94a3b8;
+            margin-bottom: 3rem;
+            max-width: 80%;
+            line-height: 1.5;
+        }
+
+        .stat-result {
+            margin-bottom: 2rem;
+            display: flex;
+            gap: 2rem;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: white;
+            border: none;
+            padding: 16px 48px;
+            font-size: 1.25rem;
+            font-weight: 700;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-primary:active {
+            transform: scale(0.95);
+        }
+
+        /* Particle Effects */
+        .particle {
+            position: absolute;
+            pointer-events: none;
+            animation: pop 0.6s ease-out forwards;
+        }
+
+        @keyframes pop {
+            0% {
+                transform: scale(0) translate(0, 0);
+                opacity: 1;
+            }
+
+            100% {
+                transform: scale(1.5) translate(var(--dx), var(--dy));
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="timer-container">
+        <div class="timer-bar" id="timerBar"></div>
+    </div>
+
+    <div class="hud">
+        <div class="score-box">Score: <span id="score">0</span></div>
+        <div class="score-box" style="display: none;" id="avgTimeBox">0ms</div>
+    </div>
+
+    <div class="game-area">
+        <div class="equation" id="equation">2 + 2</div>
+    </div>
+
+    <div class="options-grid">
+        <div class="btn-option" id="btnLeft" onclick="handleInput(0)">4</div>
+        <div class="btn-option" id="btnRight" onclick="handleInput(1)">5</div>
+    </div>
+
+    <!-- Start / End Screen -->
+    <div class="overlay" id="overlay">
+        <h1 class="title" id="overlayTitle">Math Reaction</h1>
+        <p class="subtitle" id="overlaySubtitle">Tap the correct answer as fast as you can!<br>Don't run out of time.
+        </p>
+
+        <div class="stat-result" id="results" style="display: none;">
+            <div class="stat-item">
+                <span class="stat-label">Score</span>
+                <span class="stat-value" id="finalScore">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Avg Time</span>
+                <span class="stat-value" id="finalTime">0ms</span>
+            </div>
+        </div>
+
+        <button class="btn-primary" onclick="startGame()" id="actionBtn">PLAY NOW</button>
+    </div>
+
+    <script>
+        const state = {
+            isPlaying: false,
+            score: 0,
+            questionStartTime: 0,
+            totalResponseTime: 0,
+            correctCount: 0,
+            timer: null,
+            maxTime: 3000, // Starting MS per question
+            currentTime: 3000,
+            currentCorrectIndex: 0 // 0 for Left, 1 for Right
+        };
+
+        const els = {
+            score: document.getElementById('score'),
+            equation: document.getElementById('equation'),
+            btnLeft: document.getElementById('btnLeft'),
+            btnRight: document.getElementById('btnRight'),
+            timerBar: document.getElementById('timerBar'),
+            overlay: document.getElementById('overlay'),
+            overlayTitle: document.getElementById('overlayTitle'),
+            overlaySubtitle: document.getElementById('overlaySubtitle'),
+            results: document.getElementById('results'),
+            finalScore: document.getElementById('finalScore'),
+            finalTime: document.getElementById('finalTime'),
+            actionBtn: document.getElementById('actionBtn'),
+            avgTimeBox: document.getElementById('avgTimeBox')
+        };
+
+        // Core Game Logic
+        function startGame() {
+            state.isPlaying = true;
+            state.score = 0;
+            state.totalResponseTime = 0;
+            state.correctCount = 0;
+            state.maxTime = 3000;
+
+            els.score.textContent = '0';
+            els.overlay.classList.add('hidden');
+            els.results.style.display = 'none';
+            els.avgTimeBox.style.display = 'none';
+
+            nextLevel();
+        }
+
+        function nextLevel() {
+            if (!state.isPlaying) return;
+
+            // Generate numbers based on difficulty (score)
+            // Difficulty curve: 
+            // 0-10: Add/Sub, single/double digits
+            // 10-20: Add/Sub/Mul, simple
+            // 20+: Faster
+
+            const diff = Math.min(Math.floor(state.score / 5), 5); // 0 to 5
+            generateEquation(diff);
+
+            // Render UI
+            els.equation.classList.remove('active');
+
+            // Micro delay for animation
+            setTimeout(() => {
+                els.equation.classList.add('active');
+            }, 50);
+
+            // Reset Timer
+            state.maxTime = Math.max(1000, 3000 - (state.score * 50)); // Speed up
+            state.currentTime = state.maxTime;
+            state.questionStartTime = Date.now();
+
+            if (state.timer) cancelAnimationFrame(state.timer);
+            gameLoop();
+        }
+
+        function generateEquation(difficulty) {
+            let a, b, op, ans;
+            const ops = ['+', '-'];
+            if (difficulty > 1) ops.push('×');
+
+            op = ops[Math.floor(Math.random() * ops.length)];
+
+            if (op === '×') {
+                a = Math.floor(Math.random() * (4 + difficulty)) + 2;
+                b = Math.floor(Math.random() * (4 + difficulty)) + 2;
+                ans = a * b;
+            } else {
+                a = Math.floor(Math.random() * (10 + difficulty * 5)) + 1;
+                b = Math.floor(Math.random() * (10 + difficulty * 5)) + 1;
+
+                if (op === '-') {
+                    // Ensure positive result for simplicity or allow negative? Let's keep it simple -> positive only for speed
+                    if (a < b) [a, b] = [b, a];
+                    ans = a - b;
+                } else {
+                    ans = a + b;
+                }
+            }
+
+            els.equation.textContent = `${a} ${op} ${b}`;
+
+            // Answers
+            state.currentCorrectIndex = Math.random() < 0.5 ? 0 : 1;
+
+            // Generate wrong answer close to real one
+            let fake;
+            do {
+                const offset = Math.floor(Math.random() * 5) + 1;
+                fake = Math.random() < 0.5 ? ans + offset : ans - offset;
+            } while (fake === ans || fake < 0);
+
+            if (state.currentCorrectIndex === 0) {
+                els.btnLeft.textContent = ans;
+                els.btnRight.textContent = fake;
+            } else {
+                els.btnLeft.textContent = fake;
+                els.btnRight.textContent = ans;
+            }
+        }
+
+        function gameLoop() {
+            if (!state.isPlaying) return;
+
+            const now = Date.now();
+            const elapsed = now - state.questionStartTime;
+            state.currentTime = state.maxTime - elapsed;
+
+            const pct = Math.max(0, (state.currentTime / state.maxTime) * 100);
+            els.timerBar.style.width = `${pct}%`;
+
+            if (state.currentTime <= 0) {
+                gameOver("Time's Up!");
+            } else {
+                state.timer = requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function handleInput(index) {
+            if (!state.isPlaying) return;
+
+            const isCorrect = index === state.currentCorrectIndex;
+            const btn = index === 0 ? els.btnLeft : els.btnRight;
+
+            if (isCorrect) {
+                // Feedback
+                btn.classList.add('correct');
+                setTimeout(() => btn.classList.remove('correct'), 150);
+
+                // Stats
+                const reaction = Date.now() - state.questionStartTime;
+                state.totalResponseTime += reaction;
+                state.correctCount++;
+                state.score++;
+                els.score.textContent = state.score;
+
+                // Update Avg Score display occasionally? No, keep HUD clean.
+
+                // Effect
+                createParticles(btn);
+
+                nextLevel();
+            } else {
+                btn.classList.add('wrong');
+                setTimeout(() => btn.classList.remove('wrong'), 300);
+                gameOver("Wrong Answer!");
+            }
+        }
+
+        function gameOver(reason) {
+            state.isPlaying = false;
+            cancelAnimationFrame(state.timer);
+
+            const avg = state.correctCount > 0
+                ? Math.round(state.totalResponseTime / state.correctCount)
+                : 0;
+
+            els.overlayTitle.textContent = "GAME OVER";
+            els.overlaySubtitle.textContent = reason;
+            els.finalScore.textContent = state.score;
+            els.finalTime.textContent = `${avg}ms`;
+
+            els.results.style.display = 'flex';
+            els.actionBtn.textContent = "TRY AGAIN";
+            els.overlay.classList.remove('hidden');
+        }
+
+        // Particle System
+        function createParticles(element) {
+            const rect = element.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+
+            for (let i = 0; i < 8; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                p.style.left = centerX + 'px';
+                p.style.top = centerY + 'px';
+                p.style.width = Math.random() * 8 + 4 + 'px';
+                p.style.height = p.style.width;
+                p.style.background = `hsl(${Math.random() * 50 + 120}, 100%, 50%)`; // Greens
+                p.style.borderRadius = '50%';
+
+                const angle = Math.random() * Math.PI * 2;
+                const vel = Math.random() * 100 + 50;
+
+                p.style.setProperty('--dx', Math.cos(angle) * vel + 'px');
+                p.style.setProperty('--dy', Math.sin(angle) * vel + 'px');
+
+                document.body.appendChild(p);
+                setTimeout(() => p.remove(), 600);
+            }
+        }
+
+    </script>
+</body>
+
+</html>
