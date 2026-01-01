@@ -12,6 +12,10 @@
     *   `expo-file-system`: Для хранения файлов игр на устройстве.
     *   `@react-native-async-storage/async-storage`: Для хранения метаданных (список игр).
     *   `react-native-pager-view` / `FlatList`: Для реализации механики ленты.
+    *   `@supabase/supabase-js`: JS клиент для базы данных Supabase (PostgreSQL).
+    *   `expo-secure-store`: Для безопасного хранения сессий авторизации.
+    *   `expo-web-browser`: Для OAuth авторизации (Google).
+    *   `expo-linking`: Для обработки Deep Links.
 
 ## 3. Архитектура и Структура папок
 
@@ -28,16 +32,32 @@
     *   `types/`: TypeScript интерфейсы (например, `GameModel`).
     *   `components/`: Переиспользуемые UI компоненты.
 
-### Модели данных
-**GameModel**
-```typescript
-interface GameModel {
-  id: string;        // Уникальный ID
-  name: string;      // Название игры
-  uri: string;       // Локальный путь к файлу (file://...)
-  dateAdded: number; // Timestamp добавления
-}
-```
+### Модели данных (Supabase)
+
+**Profiles (profiles)**
+*   `id`: UUID (FK -> `auth.users`)
+*   `username`: Text
+*   `avatar_url`: Text
+*   `created_at`: Timestamp
+
+**Games (games)**
+*   `id`: UUID
+*   `user_id`: UUID (FK -> `profiles.id`)
+*   `title`: Text
+*   `html_content`: Text (Исходный код игры)
+*   `created_at`: Timestamp
+
+**Likes (likes)**
+*   `id`: UUID
+*   `user_id`: UUID (FK -> `profiles.id`)
+*   `game_id`: UUID (FK -> `games.id`)
+
+**Comments (comments)**
+*   `id`: UUID
+*   `user_id`: UUID (FK -> `profiles.id`)
+*   `game_id`: UUID (FK -> `games.id`)
+*   `content`: Text
+
 
 ## 4. Ключевой функционал
 
@@ -53,9 +73,22 @@ interface GameModel {
 *   **Удаление**: Возможность удалить игру из библиотеки.
 
 ### Сервис хранения (GameStorageService)
-*   **Инициализация**: Создает папку `games/` во внутреннем хранилище (`FileSystem.documentDirectory`).
-*   **Seeding**: При первом запуске автоматически создает файлы стандартных игр (Falling Square, Memory Matrix) из захардкоженных строк/ассетов.
-*   **Хранение**: Список игр сохраняется в `AsyncStorage` (ключ `games_list`).
+*   **Логика**: Полностью переписана для работы с Supabase.
+*   **Хранение игр**: Игры хранятся в таблице `games` (поле `html_content`). Локальное кеширование пока не используется.
+*   **Feed (Лента)**: `getGames()` загружает последние 50 игр для общей ленты.
+*   **Profile (Профиль)**: `getUserGames(userId)` загружает игры конкретного пользователя.
+*   **Seeding**: При отсутствии игр в базе, авторизованный пользователь может инициировать создание дефолтных игр (Falling Square).
+
+### Авторизация
+*   **Провайдеры**:
+    *   **Email + Password**: Стандартная регистрация. При регистрации срабатывает DB Trigger `on_auth_user_created`, создающий запись в `public.profiles`.
+    *   **Google OAuth**: Реализовано через Deep Linking (`tiktokgames://google-auth`). Использует `expo-web-browser` для открытия окна входа.
+*   **Сессия**: Сохраняется через `ExpoSecureStore` (Native) или `AsyncStorage` (Web).
+*   **Deep Linking**: Схема приложения `tiktokgames://` настроена в `app.json`.
+*   **RLS (Row Level Security)**:
+    *   Игры и комментарии видны всем.
+    *   Загружать игры, ставить лайки и комментировать могут только авторизованные пользователи.
+    *   Редактировать/удалять можно только свои данные.
 
 ## 5. Требования к играм
 Игры должны быть реализованы как **единый HTML-файл** (Single File HTML).

@@ -6,20 +6,39 @@ import { GameModel } from '../../src/types/GameModel';
 import { GameStorageService } from '../../src/services/GameStorageService';
 import { useState, useEffect, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
+import { Session } from '@supabase/supabase-js';
+import { supabase } from '../../lib/supabase';
+import Auth from '../../src/components/Auth';
 
 export default function ProfileScreen() {
+    const [session, setSession] = useState<Session | null>(null);
     const [games, setGames] = useState<GameModel[]>([]);
     const [refreshing, setRefreshing] = useState(false);
 
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setSession(session);
+        });
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setSession(session);
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
+
     const loadGames = async () => {
-        const loadedGames = await GameStorageService.getGames();
+        if (!session?.user) return;
+        const loadedGames = await GameStorageService.getUserGames(session.user.id);
         setGames(loadedGames);
     };
 
     useFocusEffect(
         useCallback(() => {
-            loadGames();
-        }, [])
+            if (session) {
+                loadGames();
+            }
+        }, [session])
     );
 
     const onRefresh = useCallback(async () => {
@@ -52,12 +71,19 @@ export default function ProfileScreen() {
         await loadGames();
     };
 
+    if (!session) {
+        return <Auth />;
+    }
+
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <Ionicons name="person-circle-outline" size={80} color={Colors.text} />
-                <Text style={styles.username}>@User</Text>
+                <Text style={styles.username}>{session.user.email?.split('@')[0]}</Text>
                 <Text style={styles.stats}>{games.length} Games • 0 Likes</Text>
+                <TouchableOpacity style={styles.signOutBtn} onPress={() => supabase.auth.signOut()}>
+                    <Text style={styles.signOutText}>Sign Out</Text>
+                </TouchableOpacity>
             </View>
 
             <View style={styles.content}>
@@ -127,6 +153,18 @@ const styles = StyleSheet.create({
         color: Colors.textSecondary,
         fontSize: 14,
         marginTop: 5,
+    },
+    signOutBtn: {
+        marginTop: 15,
+        paddingHorizontal: 15,
+        paddingVertical: 5,
+        borderRadius: 15,
+        borderWidth: 1,
+        borderColor: Colors.textSecondary,
+    },
+    signOutText: {
+        color: Colors.textSecondary,
+        fontSize: 12,
     },
     content: {
         flex: 1,

@@ -2,7 +2,6 @@ import React, { useRef } from 'react';
 import { StyleSheet, View, Text, PanResponder } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { GameModel } from '../types/GameModel';
-import { Colors } from '../constants/Colors';
 
 interface GameContainerProps {
     game: GameModel;
@@ -43,7 +42,7 @@ export const GameContainer: React.FC<GameContainerProps> = ({ game, isActive, on
     return (
         <View style={styles.container} {...panResponder.panHandlers}>
             <WebView
-                source={{ uri: game.uri }}
+                source={game.html_content ? { html: game.html_content } : { uri: game.uri }}
                 style={styles.webview}
                 scrollEnabled={false}
                 originWhitelist={['*']}
@@ -60,9 +59,7 @@ export const GameContainer: React.FC<GameContainerProps> = ({ game, isActive, on
                     </View>
                 )}
             />
-            <View style={styles.overlay}>
-                <Text style={styles.gameTitle}>{game.name}</Text>
-            </View>
+
         </View>
     );
 };
@@ -76,20 +73,7 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: 'transparent',
     },
-    overlay: {
-        position: 'absolute',
-        bottom: 80, // Above tab bar
-        left: 10,
-        padding: 10,
-    },
-    gameTitle: {
-        color: Colors.text,
-        fontSize: 18,
-        fontWeight: 'bold',
-        textShadowColor: 'rgba(0, 0, 0, 0.75)',
-        textShadowOffset: { width: -1, height: 1 },
-        textShadowRadius: 10
-    },
+
     errorContainer: {
         flex: 1,
         justifyContent: 'center',

@@ -3,6 +3,7 @@
     "name": "temp_init",
     "slug": "temp_init",
     "version": "1.0.0",
+    "scheme": "tiktokgames",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",

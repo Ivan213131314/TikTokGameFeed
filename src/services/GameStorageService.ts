@@ -1,109 +1,125 @@
-import * as FileSystem from 'expo-file-system/legacy';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../../lib/supabase';
 import { GameModel } from '../types/GameModel';
-
-const GAMES_STORAGE_KEY = 'games_list';
-
-const getGamesDir = () => {
-    // Defines a safe path even if documentDirectory is supposedly missing in types
-    return (FileSystem.documentDirectory ?? '') + 'games/';
-};
 
 export const GameStorageService = {
     async initialize() {
-        const dir = getGamesDir();
-        if (!dir) return; // Cannot initialize without directory
-
-        const dirInfo = await FileSystem.getInfoAsync(dir);
-        if (!dirInfo.exists) {
-            await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-        }
+        // No-op for Supabase
     },
 
     async getGames(): Promise<GameModel[]> {
-        try {
-            const jsonValue = await AsyncStorage.getItem(GAMES_STORAGE_KEY);
-            return jsonValue != null ? JSON.parse(jsonValue) : [];
-        } catch (e) {
-            console.error('Failed to load games', e);
+        const { data, error } = await supabase
+            .from('games')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(50); // Limit to 50 for now for the feed
+
+        if (error) {
+            console.error('Error fetching games:', error);
             return [];
         }
+
+        return data.map((game: any) => ({
+            id: game.id,
+            name: game.title,
+            html_content: game.html_content,
+            dateAdded: new Date(game.created_at).getTime(),
+            user_id: game.user_id,
+        }));
+    },
+
+    async getUserGames(userId: string): Promise<GameModel[]> {
+        const { data, error } = await supabase
+            .from('games')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching user games:', error);
+            return [];
+        }
+
+        return data.map((game: any) => ({
+            id: game.id,
+            name: game.title,
+            html_content: game.html_content,
+            dateAdded: new Date(game.created_at).getTime(),
+            user_id: game.user_id,
+        }));
     },
 
     async addGame(name: string, sourceUri: string): Promise<GameModel> {
-        await this.initialize();
+        // Read file content first
+        // Since we are in Expo, we might need to read the file string to upload.
+        // However, for web compat or simplicity, if we have the content string, we upload it.
+        // If we only have URI, we need to read it.
+        // On native, use Expo FileSystem to read.
 
-        const id = Date.now().toString();
-        // Clean filename to be safe
-        const safeName = name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        const fileName = `${id}_${safeName}.html`;
-        const dir = getGamesDir();
-        if (!dir) throw new Error('Cannot add game: Storage directory unavailable');
+        // Dynamic import to avoid issues if used on Web without expo-file-system
+        let htmlContent = '';
+        try {
+            const FileSystem = require('expo-file-system/legacy');
+            htmlContent = await FileSystem.readAsStringAsync(sourceUri);
+        } catch (e) {
+            console.error("Could not read file for upload:", e);
+            throw new Error("Failed to read game file");
+        }
 
-        const destUri = dir + fileName;
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("User not authenticated");
 
-        // Copy file to our private games directory
-        await FileSystem.copyAsync({
-            from: sourceUri,
-            to: destUri,
-        });
+        const { data, error } = await supabase
+            .from('games')
+            .insert({
+                user_id: user.id,
+                title: name,
+                html_content: htmlContent,
+                description: 'Uploaded via app',
+            })
+            .select()
+            .single();
 
-        const newGame: GameModel = {
-            id,
-            name,
-            uri: destUri,
-            dateAdded: Date.now(),
+        if (error) {
+            console.error("Error uploading game:", error);
+            throw error;
+        }
+
+        return {
+            id: data.id,
+            name: data.title,
+            html_content: data.html_content,
+            dateAdded: new Date(data.created_at).getTime(),
+            user_id: data.user_id,
         };
-
-        const games = await this.getGames();
-        const updatedGames = [newGame, ...games]; // Add to top
-        await AsyncStorage.setItem(GAMES_STORAGE_KEY, JSON.stringify(updatedGames));
-
-        return newGame;
     },
 
     async deleteGame(id: string): Promise<void> {
-        const games = await this.getGames();
-        const gameToDelete = games.find(g => g.id === id);
+        const { error } = await supabase
+            .from('games')
+            .delete()
+            .eq('id', id);
 
-        if (gameToDelete) {
-            await FileSystem.deleteAsync(gameToDelete.uri, { idempotent: true });
-            const updatedGames = games.filter(g => g.id !== id);
-            await AsyncStorage.setItem(GAMES_STORAGE_KEY, JSON.stringify(updatedGames));
+        if (error) {
+            console.error("Error deleting game:", error);
         }
     },
 
     async seedDefaultGames(): Promise<void> {
+        // Check if default games exist (using a known title or ID preference) or just skip.
+        // Ideally, we want some public games for everyone.
+        // Since RLS allows reading all games, we just need to ensure *some* games exist.
+        // We can check if the feed is empty.
+
         const games = await this.getGames();
-        const defaultGameName = 'Falling Square';
+        if (games.length > 0) return;
 
-        // Check if already seeded
-        if (games.some(g => g.name === defaultGameName)) {
-            return;
-        }
+        // If no games, we can't easily "upload" one without a signed-in user.
+        // So we might skip seeding or require the user to be signed in to seed.
 
-        await this.initialize();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return; // Cannot seed if not logged in
 
-        // We can't easily access assets in Expo without a config plugin or just using Asset.fromModule
-        // But since we are in a bare/managed workflow, let's try a different approach.
-        // We will manually load the file content if possible, OR just copy it if it's a known asset.
-        // For simplicity in this environment, let's assume we can require the file and write it.
-        // NOTE: React Native's require returns a number (ID). We need Asset.fromModule.
-
-        // However, require('./path/to/file.html') might not work out of the box with the metro bundler for HTML files 
-        // unless configured. 
-        // A safer bet without messing with metro.config.js is to write the string content directly 
-        // OR rely on the user to bundle it. 
-
-        // Let's try the Asset module approach which is standard in Expo.
-        try {
-            const { Asset } = require('expo-asset');
-            // We need to ensure the HTML file is treated as an asset. 
-            // If the metro config doesn't support HTML, this might fail at build time.
-            // As a fallback for this specific task, I will WRITE the content directly here 
-            // to ensure it works without complex config changes.
-
-            const gameContent = `<!DOCTYPE html>
+        const defaultGameContent = `<!DOCTYPE html>
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -138,374 +154,13 @@ export const GameStorageService = {
 </body>
 </html>`;
 
-            const id = 'default_falling_square';
-            const fileName = `${id}.html`;
-            const dir = getGamesDir();
-            if (!dir) return;
-            const destUri = dir + fileName;
-
-            await FileSystem.writeAsStringAsync(destUri, gameContent);
-
-            const newGame: GameModel = {
-                id,
-                name: defaultGameName,
-                uri: destUri,
-                dateAdded: Date.now(),
-            };
-
-            const updatedGames = [...games, newGame];
-            await AsyncStorage.setItem(GAMES_STORAGE_KEY, JSON.stringify(updatedGames));
-
-        } catch (e) {
-            console.error('Failed to seed default games', e);
-        }
-
-        // Seed Memory Matrix
-        const memoryMatrixName = 'Memory Matrix';
-        if (games.some(g => g.name === memoryMatrixName)) {
-            return;
-        }
-
-        try {
-            const gameContent = `<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Memory Matrix</title>
-    <style>
-        :root {
-            --bg-color: #1a1a1a;
-            --tile-color: #333;
-            --tile-active: #0ff;
-            /* Cyan neon */
-            --tile-error: #f00;
-            --text-color: #eee;
-            --gap: 10px;
-        }
-
-        * {
-            box-sizing: border-box;
-            user-select: none;
-            -webkit-user-select: none;
-            touch-action: manipulation;
-        }
-
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            overflow: hidden;
-        }
-
-        h1 {
-            font-size: 2rem;
-            margin-bottom: 20px;
-            font-weight: 300;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-        }
-
-        #level-indicator {
-            font-size: 1.2rem;
-            margin-bottom: 20px;
-            color: #888;
-        }
-
-        .game-container {
-            position: relative;
-            width: 90vmin;
-            height: 90vmin;
-            max-width: 400px;
-            max-height: 400px;
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(3, 1fr);
-            gap: var(--gap);
-            width: 100%;
-            height: 100%;
-        }
-
-        .tile {
-            background-color: var(--tile-color);
-            border-radius: 8px;
-            cursor: pointer;
-            transition: transform 0.1s ease, background-color 0.2s;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-        }
-
-        .tile:active {
-            transform: scale(0.95);
-        }
-
-        .tile.active {
-            background-color: var(--tile-active);
-            box-shadow: 0 0 15px var(--tile-active);
-            transform: scale(1.05);
-        }
-
-        .tile.error {
-            background-color: var(--tile-error);
-            box-shadow: 0 0 15px var(--tile-error);
-            animation: shake 0.4s cubic-bezier(.36, .07, .19, .97) both;
-        }
-
-        .overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.85);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            border-radius: 12px;
-            visibility: hidden;
-            opacity: 0;
-            transition: opacity 0.3s;
-            z-index: 10;
-        }
-
-        .overlay.visible {
-            visibility: visible;
-            opacity: 1;
-        }
-
-        .overlay h2 {
-            font-size: 2.5rem;
-            margin: 0 0 20px;
-            color: var(--tile-active);
-        }
-
-        .btn {
-            background: var(--tile-active);
-            color: #000;
-            border: none;
-            padding: 12px 30px;
-            font-size: 1.2rem;
-            border-radius: 25px;
-            cursor: pointer;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 10px var(--tile-active);
-        }
-
-        @keyframes shake {
-
-            10%,
-            90% {
-                transform: translate3d(-1px, 0, 0);
-            }
-
-            20%,
-            80% {
-                transform: translate3d(2px, 0, 0);
-            }
-
-            30%,
-            50%,
-            70% {
-                transform: translate3d(-4px, 0, 0);
-            }
-
-            40%,
-            60% {
-                transform: translate3d(4px, 0, 0);
-            }
-        }
-    </style>
-</head>
-
-<body>
-
-    <div id="level-indicator">Level 1</div>
-
-    <div class="game-container">
-        <div class="grid" id="grid">
-            <!-- Tiles generated by JS -->
-        </div>
-
-        <div class="overlay" id="start-overlay">
-            <h2>Memory Matrix</h2>
-            <button class="btn" onclick="startGame()">Start</button>
-        </div>
-
-        <div class="overlay" id="game-over-overlay">
-            <h2 style="color: var(--tile-error)">Game Over</h2>
-            <p id="final-score" style="margin-bottom: 20px; font-size: 1.2rem;">Level: 1</p>
-            <button class="btn" onclick="restartGame()">Try Again</button>
-        </div>
-    </div>
-
-    <script>
-        const grid = document.getElementById('grid');
-        const levelDisplay = document.getElementById('level-indicator');
-        const startOverlay = document.getElementById('start-overlay');
-        const gameOverOverlay = document.getElementById('game-over-overlay');
-        const finalScoreDisplay = document.getElementById('final-score');
-
-        let sequence = [];
-        let playerSequence = [];
-        let level = 1;
-        let isInputEnabled = false;
-
-        // Initialize Grid
-        for (let i = 0; i < 9; i++) {
-            const tile = document.createElement('div');
-            tile.classList.add('tile');
-            tile.dataset.index = i;
-            tile.addEventListener('pointerdown', (e) => handleInput(i, tile)); // Use pointerdown for instant reaction
-            grid.appendChild(tile);
-        }
-
-        const tiles = document.querySelectorAll('.tile');
-
-        // Show start screen initially
-        startOverlay.classList.add('visible');
-
-        function startGame() {
-            startOverlay.classList.remove('visible');
-            gameOverOverlay.classList.remove('visible');
-            resetGameParams();
-            setTimeout(playRound, 500);
-        }
-
-        function restartGame() {
-            gameOverOverlay.classList.remove('visible');
-            resetGameParams();
-            setTimeout(playRound, 500);
-        }
-
-        function resetGameParams() {
-            sequence = [];
-            playerSequence = [];
-            level = 1;
-            updateLevelDisplay();
-        }
-
-        function updateLevelDisplay() {
-            levelDisplay.textContent = \`Level \${level}\`;
-        }
-
-        function playRound() {
-            isInputEnabled = false;
-            playerSequence = [];
-
-            // Add new random step
-            const nextStep = Math.floor(Math.random() * 9);
-            sequence.push(nextStep);
-
-            playSequence();
-        }
-
-        async function playSequence() {
-            // Wait a bit before starting sequence
-            await delay(300);
-
-            for (const index of sequence) {
-                await flashTile(index);
-                await delay(200); // Inter-flash gap
-            }
-
-            isInputEnabled = true;
-        }
-
-        function flashTile(index) {
-            return new Promise(resolve => {
-                const tile = tiles[index];
-                tile.classList.add('active');
-                setTimeout(() => {
-                    tile.classList.remove('active');
-                    resolve();
-                }, 400); // Flash duration
+        await supabase
+            .from('games')
+            .insert({
+                user_id: user.id,
+                title: 'Falling Square',
+                html_content: defaultGameContent,
+                description: 'Classic falling blocks game',
             });
-        }
-
-        function handleInput(index, tile) {
-            if (!isInputEnabled) return;
-
-            // Visual feedback for tap
-            tile.classList.add('active');
-            setTimeout(() => tile.classList.remove('active'), 200);
-
-            // Logic check
-            const currentStep = playerSequence.length;
-            if (sequence[currentStep] === index) {
-                playerSequence.push(index);
-
-                // Round complete?
-                if (playerSequence.length === sequence.length) {
-                    isInputEnabled = false;
-                    level++;
-                    updateLevelDisplay();
-                    setTimeout(playRound, 1000);
-                }
-            } else {
-                // Mistake!
-                isInputEnabled = false;
-                tile.classList.add('error');
-                setTimeout(() => tile.classList.remove('error'), 500);
-                triggerGameOver();
-            }
-        }
-
-        function triggerGameOver() {
-            setTimeout(() => {
-                finalScoreDisplay.textContent = \`You reached Level \${level}\`;
-                gameOverOverlay.classList.add('visible');
-            }, 800);
-        }
-
-        function delay(ms) {
-            return new Promise(resolve => setTimeout(resolve, ms));
-        }
-    </script>
-</body>
-
-</html>`;
-
-            const id = 'default_memory_matrix';
-            const fileName = `${id}.html`;
-            const dir = getGamesDir();
-            if (!dir) return;
-            const destUri = dir + fileName;
-
-            await FileSystem.writeAsStringAsync(destUri, gameContent);
-
-            // Fetch latest games again to append safely
-            const currentGames = await this.getGames();
-
-            const newGame: GameModel = {
-                id,
-                name: memoryMatrixName,
-                uri: destUri,
-                dateAdded: Date.now(),
-            };
-
-            const updatedGames = [...currentGames, newGame];
-            await AsyncStorage.setItem(GAMES_STORAGE_KEY, JSON.stringify(updatedGames));
-
-        } catch (e) {
-            console.error('Failed to seed default games (Memory Matrix)', e);
-        }
     }
 };
