@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, TouchableOpacity, FlatList, SafeAreaView, RefreshControl } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, FlatList, SafeAreaView, RefreshControl, Alert } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { Colors } from '../../src/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
@@ -67,8 +67,21 @@ export default function ProfileScreen() {
     };
 
     const deleteGame = async (id: string) => {
-        await GameStorageService.deleteGame(id);
-        await loadGames();
+        Alert.alert(
+            "Delete Game",
+            "Are you sure you want to delete this game? This cannot be undone.",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                        await GameStorageService.deleteGame(id);
+                        await loadGames();
+                    }
+                }
+            ]
+        );
     };
 
     if (!session) {

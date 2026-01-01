@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Crossy Road Clone</title>
+    <style>
+        :root {
+            --primary: #6C5CE7;
+            --background: #1a1a1a;
+            --surface: #2d2d2d;
+            --text: #ffffff;
+            --success: #00b894;
+            --danger: #d63031;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--background);
+            color: var(--text);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: 600px;
+            /* Tablet/Desktop limit */
+            background-color: #81ecec;
+            /* Sky/Water default */
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            flex: 1;
+            image-rendering: pixelated;
+            /* Retro feel */
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+        }
+
+        .score-display {
+            font-size: 2rem;
+            font-weight: bold;
+            text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+            text-align: left;
+        }
+
+        .best-score {
+            font-size: 1rem;
+            opacity: 0.8;
+        }
+
+        #screen-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+            backdrop-filter: blur(5px);
+            transition: opacity 0.3s ease;
+            z-index: 10;
+        }
+
+        #screen-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin: 0 0 20px 0;
+            color: #fdcb6e;
+            text-shadow: 3px 3px 0 #d63031;
+            text-align: center;
+            line-height: 1;
+        }
+
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(108, 92, 231, 0.4);
+            transition: transform 0.1s, box-shadow 0.1s;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 2px 5px rgba(108, 92, 231, 0.4);
+        }
+
+        #controls-area {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            height: 180px;
+            pointer-events: none;
+            /* Let clicks pass through if not on buttons */
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: center;
+            padding-bottom: 20px;
+            z-index: 5;
+        }
+
+        .d-pad {
+            position: relative;
+            width: 180px;
+            height: 120px;
+            pointer-events: auto;
+        }
+
+        .d-btn {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            backdrop-filter: blur(2px);
+            transition: background 0.1s;
+        }
+
+        .d-btn:active {
+            background: rgba(255, 255, 255, 0.6);
+        }
+
+        .d-btn svg {
+            width: 30px;
+            height: 30px;
+            fill: white;
+            filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+        }
+
+        .d-up {
+            top: 0;
+            left: 60px;
+        }
+
+        .d-left {
+            bottom: 0;
+            left: 0;
+        }
+
+        .d-down {
+            bottom: 0;
+            left: 60px;
+        }
+
+        .d-right {
+            bottom: 0;
+            right: 0;
+        }
+
+        /* Hide controls on desktop if keyboard is preferred, but user asked for on-screen buttons */
+        @media (min-width: 768px) {
+            /* Optional: Make controls smaller or hint keyboard usage */
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="ui-layer">
+            <div>
+                <div class="score-display" id="currentScore">0</div>
+                <div class="best-score" id="bestScore">BEST: 0</div>
+            </div>
+        </div>
+
+        <div id="controls-area">
+            <div class="d-pad">
+                <div class="d-btn d-up" data-dir="up">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z" />
+                    </svg>
+                </div>
+                <div class="d-btn d-left" data-dir="left">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+                    </svg>
+                </div>
+                <div class="d-btn d-down" data-dir="down">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
+                    </svg>
+                </div>
+                <div class="d-btn d-right" data-dir="right">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <div id="screen-overlay">
+            <h1 id="screen-title">CROSSY<br>CLONE</h1>
+            <p id="final-score" style="display:none; font-size: 1.5rem; margin-bottom: 20px;">Score: 0</p>
+            <button class="btn" id="action-btn">PLAY</button>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * Crossy Road Clone Logic
+         */
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game Constants
+        const TILE_SIZE = 40; // Base tile size, will scale
+        let SCALE = 1;
+        const VIEW_WIDTH = 13; // Tiles horizontal (odd number to center player)
+        const VIEW_HEIGHT = 15; // Tiles vertical
+
+        // Colors
+        const COLORS = {
+            GRASS_LIGHT: '#55efc4',
+            GRASS_DARK: '#00b894',
+            ROAD: '#636e72',
+            WATER: '#74b9ff', // Light blue
+            PLAYER: '#fdcb6e', // Chick yellow
+            PLAYER_SHADE: '#fab1a0',
+            CAR: ['#ff7675', '#0984e3', '#e17055', '#6c5ce7'],
+            LOG: '#a29bfe', // Wood color...ish
+            TREE: '#00cec9'  // Tree color
+        };
+
+        // State & Integration
+        const state = {
+            isPlaying: false,
+            isPaused: false,
+            isGameOver: false,
+            score: 0,
+            bestScore: parseInt(localStorage.getItem('crossy_best') || '0'),
+            player: {
+                x: 6, // Center of 13 tiles (0-12)
+                y: 0, // Starts at 0, moving up increments y
+                moveTargetX: 6,
+                moveTargetY: 0,
+                isMoving: false,
+                moveProgress: 0,
+                direction: 'up', // 'up', 'down', 'left', 'right'
+                width: 0.8,
+                height: 0.8
+            },
+            camera: {
+                y: 0
+            },
+            lanes: [], // Array of lane objects
+            lastTime: 0,
+            frameCount: 0,
+            difficulty: 1
+        };
+
+        // DOM Elements
+        const uiScore = document.getElementById('currentScore');
+        const uiBest = document.getElementById('bestScore');
+        const overlay = document.getElementById('screen-overlay');
+        const screenTitle = document.getElementById('screen-title');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const actionBtn = document.getElementById('action-btn');
+
+        // Initial Setup
+        function init() {
+            resize();
+            window.addEventListener('resize', resize);
+            setupInput();
+            updateUI();
+
+            // Generate initial safe zone
+            for (let i = 0; i < 10; i++) {
+                addLane(i, 'grass');
+            }
+            // Generate some initial world
+            for (let i = 10; i < 30; i++) {
+                generateLane(i);
+            }
+
+            requestAnimationFrame(loop);
+        }
+
+        function resize() {
+            const container = document.getElementById('game-container');
+            const cw = container.clientWidth;
+            const ch = container.clientHeight;
+
+            canvas.width = cw;
+            canvas.height = ch;
+
+            // Calculate Scale to fit VIEW_WIDTH tiles horizontally
+            SCALE = cw / (VIEW_WIDTH * TILE_SIZE);
+            if (SCALE < 0.5) SCALE = 0.5;
+
+            // Adjust camera drawing context
+            // actually we will handle scaling in draw()
+        }
+
+        // Lane Generation
+        const LANE_TYPES = ['grass', 'road', 'road', 'road', 'water', 'water', 'grass'];
+
+        function generateLane(yIndex) {
+            // Logic to determine lane type based on difficulty and randomness
+            // Prevent impossible sections (e.g., 5 water lanes in a row)
+
+            let type = 'grass';
+
+            // Basic procedural weights
+            const r = Math.random();
+            const prevLane = state.lanes[yIndex - 1]; // Note: lanes map y-index to lane. We use an array where index matches Y? No, infinite.
+            // We need a map or sparse array. Let's use an array where index 0 is y=0.
+            // Actually, since we only need lanes around the player, we can keep an array and offset.
+            // BUT simpler: Array where index = y.
+
+            // Check previous lanes to avoid impossible clumps
+            let consecutiveRoads = 0;
+            let consecutiveWater = 0;
+
+            // Look back
+            let lookBack = 1;
+            while (state.lanes[yIndex - lookBack] && state.lanes[yIndex - lookBack].type === 'road') {
+                consecutiveRoads++;
+                lookBack++;
+            }
+            lookBack = 1;
+            while (state.lanes[yIndex - lookBack] && state.lanes[yIndex - lookBack].type === 'water') {
+                consecutiveWater++;
+                lookBack++;
+            }
+
+            if (consecutiveRoads > 3) type = 'grass';
+            else if (consecutiveWater > 2) type = 'grass';
+            else {
+                // Random selection
+                const choices = ['grass', 'road', 'road', 'water', 'water'];
+                if (state.score < 10) choices.push('grass', 'grass'); // Easier start
+                type = choices[Math.floor(Math.random() * choices.length)];
+            }
+
+            addLane(yIndex, type);
+        }
+
+        function addLane(y, type) {
+            // Lane properties
+            const lane = {
+                y: y,
+                type: type,
+                objects: [],
+                speed: 0,
+                direction: 1 // 1 = right, -1 = left
+            };
+
+            if (type === 'road') {
+                lane.speed = (2 + Math.random() * 2 + (state.score / 50)) * (Math.random() > 0.5 ? 1 : -1);
+                lane.direction = Math.sign(lane.speed);
+                // Add initial cars
+                addLaneObjects(lane, 'car');
+            } else if (type === 'water') {
+                lane.speed = (1.5 + Math.random() * 1.5 + (state.score / 60)) * (Math.random() > 0.5 ? 1 : -1);
+                lane.direction = Math.sign(lane.speed);
+                addLaneObjects(lane, 'log');
+            } else if (type === 'grass') {
+                // Add trees statically
+                addLaneObjects(lane, 'tree');
+            }
+
+            state.lanes[y] = lane;
+        }
+
+        function addLaneObjects(lane, objType) {
+            // Density
+            let density = 0.3; // Default chance per tile
+            if (objType === 'car') {
+                // Determine spacing. Cars need gaps.
+                // We'll generate a pattern or random placement with min gap.
+                let nextX = -5;
+                while (nextX < VIEW_WIDTH + 5) {
+                    const gap = 3 + Math.random() * 6; // Gap between cars
+                    nextX += gap;
+                    if (nextX < VIEW_WIDTH + 5) {
+                        lane.objects.push({
+                            x: nextX,
+                            y: lane.y,
+                            type: 'car',
+                            width: 1, // Tile width
+                            height: 0.8,
+                            color: COLORS.CAR[Math.floor(Math.random() * COLORS.CAR.length)]
+                        });
+                    }
+                }
+            } else if (objType === 'log') {
+                let nextX = -5;
+                while (nextX < VIEW_WIDTH + 5) {
+                    const length = 2 + Math.floor(Math.random() * 2); // Log length 2 or 3
+                    const gap = 2 + Math.random() * 3;
+                    nextX += gap; // Gap first
+                    if (nextX < VIEW_WIDTH + 5) {
+                        lane.objects.push({
+                            x: nextX,
+                            y: lane.y,
+                            type: 'log',
+                            width: length,
+                            height: 0.8,
+                            color: COLORS.LOG
+                        });
+                        nextX += length; // Advance past log
+                    }
+                }
+            } else if (objType === 'tree') {
+                for (let x = -2; x < VIEW_WIDTH + 2; x++) {
+                    // Don't block the path completely.
+                    // Randomly place trees, but ensure at least one open path in 13 tiles?
+                    // Actually, Crossy Road trees are random but usually density is low enough.
+                    // To ensure passability, we could check connectivity, but for this clone, simple random with low density is fine.
+                    // Ensure the player's start column isn't blocked immediately if it's nearby?
+                    if (Math.random() < 0.15) {
+                        lane.objects.push({
+                            x: x,
+                            y: lane.y,
+                            type: 'tree',
+                            width: 0.8,
+                            height: 0.8,
+                            color: COLORS.TREE
+                        });
+                    }
+                }
+            }
+        }
+
+        // Input
+        function setupInput() {
+            // Keyboard
+            window.addEventListener('keydown', (e) => {
+                if (state.isPaused || state.isGameOver) return;
+
+                switch (e.key) {
+                    case 'ArrowUp': movePlayer(0, 1); break;
+                    case 'ArrowDown': movePlayer(0, -1); break;
+                    case 'ArrowLeft': movePlayer(-1, 0); break;
+                    case 'ArrowRight': movePlayer(1, 0); break;
+                }
+            });
+
+            // On-screen buttons
+            document.querySelectorAll('.d-btn').forEach(btn => {
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault(); // Prevent double firing or scroll
+                    if (!state.isPlaying && !state.isGameOver) startGame();
+                    else handleInput(btn.dataset.dir);
+                });
+                btn.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    if (!state.isPlaying && !state.isGameOver) startGame();
+                    else handleInput(btn.dataset.dir);
+                });
+            });
+
+            actionBtn.addEventListener('click', () => {
+                if (state.isGameOver) resetGame();
+                else startGame();
+            });
+        }
+
+        function handleInput(dir) {
+            if (state.isPaused || state.isGameOver) return;
+            switch (dir) {
+                case 'up': movePlayer(0, 1); break;
+                case 'down': movePlayer(0, -1); break;
+                case 'left': movePlayer(-1, 0); break;
+                case 'right': movePlayer(1, 0); break;
+            }
+        }
+
+        function movePlayer(dx, dy) {
+            if (state.player.isMoving) return; // Basic turn-based feel, wait for hop to finish? 
+            // Actually fast hopping is allowed in Crossy Road. 
+            // We'll update target immediately.
+
+            const targetX = state.player.moveTargetX + dx;
+            const targetY = state.player.moveTargetY + dy;
+
+            // Boundaries
+            if (targetX < 0 || targetX >= VIEW_WIDTH) return;
+            if (targetY < state.score - 3) return; // Don't go too far back
+
+            // Check Tree collisions (static)
+            const targetLane = state.lanes[targetY];
+            if (targetLane) {
+                const blocked = targetLane.objects.some(obj =>
+                    obj.type === 'tree' && Math.round(obj.x) === targetX
+                );
+                if (blocked) return;
+            }
+
+            state.player.moveTargetX = targetX;
+            state.player.moveTargetY = targetY;
+
+            // Logic to update score
+            if (targetY > state.score) {
+                state.score = targetY;
+                // Generate more world if needed
+                if (state.lanes.length <= state.score + 20) {
+                    for (let i = 0; i < 10; i++) {
+                        generateLane(state.lanes.length);
+                    }
+                }
+            }
+            updateUI();
+        }
+
+        // Logic Loop
+        function loop(timestamp) {
+            const dt = (timestamp - state.lastTime) / 1000;
+            state.lastTime = timestamp;
+
+            if (state.isPlaying && !state.isPaused) {
+                update(dt);
+            }
+
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        function update(dt) {
+            // Update Player Position (Lerp)
+            const speed = 15 * dt; // Hop speed
+            const px = state.player.x;
+            const py = state.player.y;
+            const tx = state.player.moveTargetX;
+            const ty = state.player.moveTargetY;
+
+            if (Math.abs(tx - px) > 0.05) state.player.x += (tx - px) * speed;
+            else state.player.x = tx;
+
+            if (Math.abs(ty - py) > 0.05) state.player.y += (ty - py) * speed;
+            else state.player.y = ty;
+
+            // Snap when super close
+            if (Math.abs(tx - state.player.x) < 0.01) state.player.x = tx;
+            if (Math.abs(ty - state.player.y) < 0.01) state.player.y = ty;
+
+            // Update Map Objects
+            // We only need to update lanes visible or near visible
+            const visibleStart = Math.max(0, Math.floor(state.camera.y) - 2);
+            const visibleEnd = visibleStart + VIEW_HEIGHT + 4;
+
+            // Player Logic regarding Lane movement (Logs)
+            const currentLane = state.lanes[Math.round(state.player.y)];
+            let onLog = false;
+            let logSpeed = 0;
+
+            for (let i = visibleStart; i < visibleEnd && i < state.lanes.length; i++) {
+                const lane = state.lanes[i];
+                if (!lane) continue;
+
+                if (lane.speed !== 0) {
+                    // Move objects
+                    lane.objects.forEach(obj => {
+                        obj.x += lane.speed * dt;
+
+                        // Wrap around logic for infinite flow
+                        if (lane.speed > 0 && obj.x > VIEW_WIDTH + 5) {
+                            obj.x -= (VIEW_WIDTH + 10);
+                        } else if (lane.speed < 0 && obj.x < -5) {
+                            obj.x += (VIEW_WIDTH + 10);
+                        }
+                    });
+                }
+
+                // Collision Detection
+                // Only check if player is in this lane (approx Y match)
+                if (Math.abs(state.player.y - lane.y) < 0.3) {
+                    // Check horizontal overlap
+                    if (lane.type === 'road') {
+                        // Check cars
+                        lane.objects.forEach(obj => {
+                            if (Math.abs(state.player.x - obj.x) < (state.player.width / 2 + obj.width / 2 - 0.2)) {
+                                gameOver();
+                            }
+                        });
+                    } else if (lane.type === 'water') {
+                        // Check logs
+                        lane.objects.forEach(obj => {
+                            // Check if player is ON the log
+                            //  console.log(state.player.x, obj.x, obj.width);
+                            if (state.player.x + 0.3 > obj.x - 0.2 &&
+                                state.player.x - 0.3 < obj.x + obj.width + 0.2) {
+                                onLog = true;
+                                logSpeed = lane.speed;
+                            }
+                        });
+                    }
+                }
+            }
+
+            // Water Death Logic
+            if (currentLane && currentLane.type === 'water') {
+                // If we are settled on a water lane (not mid-hop)
+                if (Math.abs(state.player.y - state.player.moveTargetY) < 0.1 && !onLog) {
+                    // Player is in water without log
+                    gameOver();
+                } else if (onLog) {
+                    // Move player with log
+                    state.player.x += logSpeed * dt;
+                    state.player.moveTargetX += logSpeed * dt;
+                }
+            }
+
+            // Boundary Check (Off screen side)
+            if (state.player.x < -1 || state.player.x > VIEW_WIDTH) {
+                gameOver();
+            }
+
+            // Update Camera
+            // Camera chases player but doesn't go down
+            const targetCamY = state.player.y - 4; // Keep player near bottom quarter
+            if (targetCamY > state.camera.y) {
+                state.camera.y += (targetCamY - state.camera.y) * 2 * dt;
+            }
+        }
+
+        function draw() {
+            // Clear
+            ctx.fillStyle = COLORS.GRASS_LIGHT; // Base background
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const camY = state.camera.y;
+
+            // Set scale and transform
+            ctx.save();
+            const pxScale = canvas.width / VIEW_WIDTH;
+            ctx.scale(pxScale, pxScale);
+            // Invert Y axis for drawing? No, standard canvas is Y down. 
+            // Our logic is Y up (0 is bottom). So we translate.
+            // Screen Bottom = Canvas Height in logic units = VIEW_HEIGHT
+            // We want Logic Y=0 to be at Screen Bottom.
+            // And minus Camera Y.
+
+            // Transform:
+            // 1. Flip Y? Easier to specific drawing coords:
+            // ScreenY = (VIEW_HEIGHT - (LogicY - CamY)) * TileSize?
+            // Actually simpler to just translate context.
+
+            // Let's use standard coords: x corresponds to x.
+            // y corresponds to BOTTOM UP. 
+            // ctx.translate(0, VIEW_HEIGHT); ctx.scale(1, -1); could work but text rendering gets flipped.
+
+            // Manual coordinate mapping:
+            // drawX = logicX
+            // drawY = VIEW_HEIGHT - (logicY - camY) - 1 (since 0 is bottom tile)
+
+            const getDrawY = (logicY) => VIEW_HEIGHT - (logicY - camY) - 1.5;
+
+            // Draw Lanes
+            const visibleStart = Math.floor(camY) - 1;
+            const visibleEnd = visibleStart + VIEW_HEIGHT + 2;
+
+            for (let i = visibleStart; i < visibleEnd; i++) {
+                const lane = state.lanes[i];
+                if (!lane) continue;
+
+                const dy = getDrawY(lane.y);
+
+                // Draw Lane Background
+                if (lane.type === 'grass') ctx.fillStyle = ((i % 2) === 0) ? COLORS.GRASS_LIGHT : COLORS.GRASS_DARK;
+                else if (lane.type === 'road') ctx.fillStyle = COLORS.ROAD;
+                else if (lane.type === 'water') ctx.fillStyle = COLORS.WATER;
+
+                // Fill full width
+                ctx.fillRect(0, dy, VIEW_WIDTH, 1.05); // +0.05 to fix subpixel gaps
+
+                // Draw Lane Markings
+                if (lane.type === 'road') {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.globalAlpha = 0.5;
+                    ctx.fillRect(0, dy + 0.9, VIEW_WIDTH, 0.05); // bottom line
+                    ctx.globalAlpha = 1;
+                }
+            }
+
+            // Draw Objects (Order matters for Z-index, somewhat)
+            for (let i = visibleEnd; i >= visibleStart; i--) { // Draw from top to bottom (far to near)
+                const lane = state.lanes[i];
+                if (!lane) continue;
+                const dy = getDrawY(lane.y);
+
+                // Draw Objects
+                lane.objects.forEach(obj => {
+                    const dx = obj.x;
+                    if (obj.type === 'tree') drawBlock(dx, dy, obj.width, 1.2, obj.color, 0.4); // Trees are tall
+                    else if (obj.type === 'car') drawBlock(dx, dy, obj.width, 0.9, obj.color, 0.5);
+                    else if (obj.type === 'log') drawBlock(dx, dy, obj.width, 0.8, obj.color, 0);
+                });
+
+                // Draw Player if on this lane (approx)
+                if (Math.round(state.player.y) === i) {
+                    drawBlock(state.player.x, getDrawY(state.player.y), 0.6, 0.6, COLORS.PLAYER, 0.6, true);
+                }
+            }
+
+            ctx.restore();
+        }
+
+        function drawBlock(x, y, w, h, color, height3d, isPlayer = false) {
+            // Simple pseudo-3D block drawing
+            // x, y is bottom-left corner in logic space? 
+            // Our getDrawY gives top-left of the tile? No, let's clarify.
+            // getDrawY returns canvas Y coord for the tile start.
+
+            // Adjust to center objects in tile
+            const cx = x + (1 - w) / 2;
+            const cy = y + (1 - h) / 2;
+
+            // Main Face
+            ctx.fillStyle = color;
+            ctx.fillRect(cx, cy, w, h);
+
+            // Side Face (Right)
+            ctx.fillStyle = shadeColor(color, -20);
+            ctx.fillRect(cx + w, cy, height3d * 0.2, h); // thin side
+
+            // Top/Bottom Face (Top if we look down? Actually usually we see Front and Top or Front and Side)
+            // Let's do Front + Side + Top to look 3D.
+            // But this is top-downish.
+            // Let's just do a simple shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.fillRect(cx + 0.1, cy + h - 0.1, w, 0.1);
+
+            if (isPlayer) {
+                // Eyes
+                ctx.fillStyle = 'white';
+                ctx.fillRect(cx + w - 0.2, cy + 0.1, 0.15, 0.15);
+                ctx.fillStyle = 'black';
+                ctx.fillRect(cx + w - 0.15, cy + 0.15, 0.05, 0.05);
+            }
+        }
+
+        function shadeColor(color, percent) {
+            // Helper to darken hex
+            // Simple version or just usage
+            return color; // Placeholder, real implementation is complex without library
+        }
+
+        // Game State Management
+        function startGame() {
+            if (state.isPlaying) return;
+            resetGame();
+            state.isPlaying = true;
+            state.isPaused = false;
+            state.isGameOver = false;
+
+            overlay.classList.add('hidden');
+        }
+
+        function gameOver() {
+            if (state.isGameOver) return;
+            state.isGameOver = true;
+            state.isPlaying = false;
+
+            if (state.score > state.bestScore) {
+                state.bestScore = state.score;
+                localStorage.setItem('crossy_best', state.bestScore);
+            }
+
+            updateUI();
+
+            screenTitle.innerHTML = "GAME<br>OVER";
+            finalScoreDisplay.innerText = "Score: " + state.score;
+            finalScoreDisplay.style.display = 'block';
+            actionBtn.innerText = "RETRY";
+            overlay.classList.remove('hidden');
+        }
+
+        function resetGame() {
+            state.score = 0;
+            state.player.x = Math.floor(VIEW_WIDTH / 2);
+            state.player.y = 0;
+            state.player.moveTargetX = state.player.x;
+            state.player.moveTargetY = 0;
+            state.camera.y = 0;
+            state.lanes = [];
+
+            // Regenerate start
+            for (let i = 0; i < 10; i++) addLane(i, 'grass');
+            for (let i = 10; i < 30; i++) generateLane(i);
+
+            updateUI();
+        }
+
+        function updateUI() {
+            uiScore.innerText = state.score;
+            uiBest.innerText = "BEST: " + state.bestScore;
+        }
+
+        // Global Hooks
+        window.game = {
+            pause: () => { state.isPaused = true; },
+            resume: () => { state.isPaused = false; },
+            reset: () => { resetGame(); if (state.isPlaying) startGame(); }, // Reset loops if playing
+            getState: () => ({
+                score: state.score,
+                bestScore: state.bestScore,
+                isPlaying: state.isPlaying,
+                isGameOver: state.isGameOver
+            })
+        };
+
+        // Start
+        init();
+
+    </script>
+</body>
+
+</html>

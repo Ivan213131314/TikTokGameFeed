@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Doodle Jump Clone</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #fcfcfc;
+            font-family: 'Fredoka', sans-serif;
+            touch-action: none;
+            /* Prevent default touch actions like scrolling */
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #gameCanvas {
+            display: block;
+            touch-action: none;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        #header {
+            width: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .score-container {
+            background: rgba(255, 255, 255, 0.8);
+            border: 2px solid #333;
+            border-radius: 12px;
+            padding: 8px 16px;
+            color: #333;
+            font-weight: 600;
+            box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.1);
+        }
+
+        #score {
+            font-size: 24px;
+        }
+
+        #high-score {
+            font-size: 14px;
+            opacity: 0.7;
+        }
+
+        /* Screens */
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+            transition: opacity 0.3s ease;
+            z-index: 10;
+        }
+
+        .screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        h1 {
+            font-size: 48px;
+            color: #333;
+            margin: 0 0 20px 0;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-shadow: 2px 2px 0px #eee;
+        }
+
+        p {
+            font-size: 18px;
+            color: #666;
+            margin-bottom: 40px;
+            text-align: center;
+            max-width: 80%;
+            line-height: 1.5;
+        }
+
+        .btn {
+            background: #4ade80;
+            color: white;
+            border: none;
+            padding: 16px 48px;
+            font-size: 24px;
+            font-family: 'Fredoka', sans-serif;
+            font-weight: 600;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.1s, background 0.2s;
+            text-transform: uppercase;
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        .btn:hover {
+            background: #22c55e;
+        }
+
+        #game-over-score {
+            font-size: 64px;
+            color: #333;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+
+        .tutorial {
+            margin-top: 30px;
+            display: flex;
+            gap: 20px;
+            font-size: 14px;
+            color: #888;
+        }
+
+        .tutorial-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .key-icon {
+            width: 40px;
+            height: 40px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            background: white;
+        }
+    </style>
+</head>
+
+<body>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="ui-layer">
+        <div id="header">
+            <div class="score-container">
+                <div id="score">0</div>
+                <div id="high-score">BEST: 0</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="screen">
+        <h1>Jumper</h1>
+        <p>Tap Left or Right to move.<br>Bounce on platforms to go higher!</p>
+        <button class="btn" id="start-btn">Play</button>
+
+        <div class="tutorial">
+            <div class="tutorial-item">
+                <div class="key-icon">L</div>
+                <span>Left</span>
+            </div>
+            <div class="tutorial-item">
+                <div class="key-icon">R</div>
+                <span>Right</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="game-over-screen" class="screen hidden">
+        <h1>Game Over</h1>
+        <div id="game-over-score">0</div>
+        <p>Best Score: <span id="game-over-best">0</span></p>
+        <button class="btn" id="restart-btn">Play Again</button>
+    </div>
+
+    <script>
+        /**
+         * Jumper Game
+         * A vertical endless jumping game.
+         */
+
+        // --- Configuration ---
+        const CONFIG = {
+            gravity: 0.25,
+            jumpForce: 9.5,   // Initial jump velocity
+            moveSpeed: 5,     // Horizontal movement speed
+            platformWidth: 70, // Base platform width (will scale slightly)
+            platformHeight: 18,
+            platformGapMin: 60,
+            platformGapMax: 120, // Max gap between platforms vertically
+            width: window.innerWidth,
+            height: window.innerHeight,
+            colors: {
+                bg: "#fcfcfc", // faint grid defined in draw
+                player: "#4ade80", // bright green
+                platformStatic: "#86efac", // light green
+                platformMoving: "#60a5fa", // blue
+                platformBreakable: "#a97142", // brown
+                grid: "#e5e7eb"
+            }
+        };
+
+
+        // --- Safe Storage ---
+        const safeStorage = {
+            getItem: (key) => {
+                try {
+                    return localStorage.getItem(key);
+                } catch (e) {
+                    console.warn('Storage not available', e);
+                    return null;
+                }
+            },
+            setItem: (key, value) => {
+                try {
+                    localStorage.setItem(key, value);
+                } catch (e) {
+                    console.warn('Storage not available', e);
+                }
+            }
+        };
+
+        // --- Game State ---
+        const state = {
+            score: 0,
+            highScore: parseInt(safeStorage.getItem('jumper_highscore')) || 0,
+            isPlaying: false,
+            isPaused: false,
+            isGameOver: false,
+            cameraY: 0,
+            maxCameraY: 0,
+            platforms: [],
+            particles: [],
+            player: {
+                x: 0,
+                y: 0,
+                vx: 0,
+                vy: 0,
+                radius: 15,
+                direction: 1 // 1 for right, -1 for left (for visual facing)
+            },
+            input: {
+                left: false,
+                right: false
+            },
+            difficulty: 1
+        };
+
+        // --- Setup ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // UI Elements
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const scoreEl = document.getElementById('score');
+        const highScoreEl = document.getElementById('high-score');
+        const gameOverScoreEl = document.getElementById('game-over-score');
+        const gameOverBestEl = document.getElementById('game-over-best');
+        const startBtn = document.getElementById('start-btn');
+        const restartBtn = document.getElementById('restart-btn');
+
+        // Resize handling
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            CONFIG.width = canvas.width;
+            CONFIG.height = canvas.height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Initial High Score Display
+        highScoreEl.textContent = `BEST: ${state.highScore}`;
+
+        // --- Classes ---
+
+        class Platform {
+            constructor(x, y, type = 'static') {
+                this.x = x;
+                this.y = y;
+                this.w = CONFIG.platformWidth;
+                this.h = CONFIG.platformHeight;
+                this.type = type; // 'static', 'moving', 'breakable'
+                this.vx = (type === 'moving') ? (Math.random() > 0.5 ? 2 : -2) : 0;
+                this.isBroken = false;
+            }
+
+            update() {
+                if (this.type === 'moving') {
+                    this.x += this.vx;
+                    // Bounce off walls
+                    if (this.x <= 0) {
+                        this.x = 0;
+                        this.vx *= -1;
+                    } else if (this.x + this.w >= CONFIG.width) {
+                        this.x = CONFIG.width - this.w;
+                        this.vx *= -1;
+                    }
+                }
+                if (this.type === 'breakable' && this.isBroken) {
+                    this.y += 5; // Fall down visually
+                    this.w *= 0.95; // Shrink
+                }
+            }
+
+            draw(ctx, cameraY) {
+                const screenY = CONFIG.height - (this.y - cameraY);
+
+                // Skip drawing if off screen
+                if (screenY < -50 || screenY > CONFIG.height + 50) return;
+
+                let color = CONFIG.colors.platformStatic;
+                if (this.type === 'moving') color = CONFIG.colors.platformMoving;
+                if (this.type === 'breakable') color = CONFIG.colors.platformBreakable;
+
+                ctx.fillStyle = color;
+
+                if (this.type === 'breakable' && this.isBroken) {
+                    ctx.globalAlpha = 0.5;
+                }
+
+                // Draw rounded rect
+                ctx.beginPath();
+                ctx.roundRect(this.x, screenY, this.w, this.h, 6);
+                ctx.fill();
+
+                // Add top detail (highlight)
+                ctx.fillStyle = "rgba(255,255,255,0.3)";
+                ctx.beginPath();
+                ctx.roundRect(this.x, screenY, this.w, this.h / 2, { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 });
+                ctx.fill();
+
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 4;
+                this.vy = (Math.random() - 0.5) * 4;
+                this.life = 1.0;
+                this.color = color;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.1;
+                this.life -= 0.03;
+            }
+            draw(ctx, cameraY) {
+                const screenY = CONFIG.height - (this.y - cameraY);
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, screenY, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        // --- Game Logic ---
+
+        function initGame() {
+            state.score = 0;
+            state.isGameOver = false;
+            state.particles = [];
+            state.platforms = [];
+            state.cameraY = 0;
+            state.maxCameraY = 0;
+            state.difficulty = 1;
+
+            // Init Player
+            state.player.x = CONFIG.width / 2;
+            state.player.y = 100;
+            state.player.vx = 0;
+            state.player.vy = 0;
+
+            // Init Platforms (Starting set)
+            let currentY = 0;
+            // Start with a solid base
+            state.platforms.push(new Platform(CONFIG.width / 2 - CONFIG.platformWidth / 2, 0, 'static'));
+
+            // Generate up to screen height + buffer
+            while (currentY < CONFIG.height * 2) {
+                currentY += CONFIG.platformGapMin + Math.random() * (CONFIG.platformGapMax - CONFIG.platformGapMin);
+                generatePlatform(currentY);
+            }
+
+            state.isPlaying = true;
+            state.isPaused = false;
+
+            scoreEl.textContent = "0";
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function generatePlatform(y) {
+            // Difficulty scaling
+            const breakableChance = Math.min(0.2, state.difficulty * 0.01);
+            const movingChance = Math.min(0.3, state.difficulty * 0.02);
+
+            let type = 'static';
+            if (Math.random() < breakableChance) type = 'breakable';
+            else if (Math.random() < movingChance) type = 'moving';
+
+            // Keep the first few platforms static and safe
+            if (y < 500) type = 'static';
+
+            const x = Math.random() * (CONFIG.width - CONFIG.platformWidth);
+            state.platforms.push(new Platform(x, y, type));
+        }
+
+        function gameOver() {
+            state.isPlaying = false;
+            state.isGameOver = true;
+
+            // Update High Score
+            if (state.score > state.highScore) {
+                state.highScore = Math.floor(state.score);
+                safeStorage.setItem('jumper_highscore', state.highScore);
+                highScoreEl.textContent = `BEST: ${state.highScore}`;
+            }
+
+            gameOverScoreEl.textContent = Math.floor(state.score);
+            gameOverBestEl.textContent = state.highScore;
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        function spawnParticles(x, y, color, count = 5) {
+            for (let i = 0; i < count; i++) {
+                state.particles.push(new Particle(x, y, color));
+            }
+        }
+
+        function update() {
+            if (!state.isPlaying || state.isPaused) return;
+
+            const player = state.player;
+
+            // Controls
+            if (state.input.left) {
+                player.vx = -CONFIG.moveSpeed;
+                player.direction = -1;
+            } else if (state.input.right) {
+                player.vx = CONFIG.moveSpeed;
+                player.direction = 1;
+            } else {
+                // Friction
+                player.vx *= 0.8;
+            }
+
+            // Physics
+            player.x += player.vx;
+            player.y += player.vy;
+            player.vy -= CONFIG.gravity;
+
+            // Screen Wrap (Horizontal)
+            if (player.x + player.radius < 0) player.x = CONFIG.width + player.radius;
+            if (player.x - player.radius > CONFIG.width) player.x = -player.radius;
+
+            // Camera Logic
+            // If player goes above 50% of screen, move camera up
+            const targetCameraY = player.y - CONFIG.height * 0.4;
+            if (targetCameraY > state.cameraY) {
+                state.cameraY = targetCameraY;
+                state.maxCameraY = state.cameraY;
+                state.score = state.maxCameraY / 10; // 10 pixels = 1 point
+                state.difficulty = 1 + state.score / 500; // Increase diff every 500 pts
+            } else {
+                // Camera doesn"t move down, but if player falls far below camera -> death
+                if (player.y < state.cameraY - CONFIG.height * 0.6) {
+                    gameOver();
+                    return;
+                }
+            }
+
+            // Update UI
+            scoreEl.textContent = Math.floor(state.score);
+
+            // Platform Collisions (Only when falling)
+            if (player.vy < 0) {
+                // Simple bounding box + circle foot check
+                const footX = player.x;
+                const footY = player.y - player.radius; // Bottom of player? No, coordinate system: y increases UP. 
+                // Wait, standard canvas Y is down. But here I'm using "y increases up" logic for physics calculations likely to make jumping mental model easier?
+                // Actually, let's check:
+                // player.vy -= gravity (gravity is +0.25). 
+                // If y increases UP, gravity should DECREASE y velocity.
+                // If y increases DOWN (standard canvas), gravity should INCREASE y velocity.
+
+                // Let's stick to: Y = 0 is bottom logic for game state, render converts.
+                // In draw: screenY = CONFIG.height - (this.y - cameraY);
+                // So: Y increases UP in GAME WORLD.
+
+                // Thus: Gravity logic: player.vy -= gravity is correct (velocity becomes negative, pulling down).
+                // Collision logic: check feet. Feet are at player.y - radius.
+
+                // Checking platforms
+                for (let plat of state.platforms) {
+                    // Check bounds
+                    // Platform Y is the TOP surface.
+                    // Player feet must be crossing the platform top from above.
+                    // Previous frame feet: (player.y - vy) - radius. (approx)
+
+                    // Let's rely on overlap with "tolerance"
+                    // Feet y: player.y - player.radius
+                    if (
+                        player.y - player.radius <= plat.y + plat.h && // Feet below platform top + height (visually below top edge?? wait)
+                        player.y - player.radius >= plat.y - 5 && // Feet slightly above/on platform top
+                        player.x >= plat.x &&
+                        player.x <= plat.x + plat.w
+                    ) {
+                        // Hit!
+                        if (plat.type === 'breakable') {
+                            if (!plat.isBroken) {
+                                plat.isBroken = true;
+                                player.vy = 0; // slight stumble? or just fall through
+                                spawnParticles(plat.x + plat.w / 2, plat.y, CONFIG.colors.platformBreakable, 8);
+                                // Sound effect placeholder
+                            }
+                        } else {
+                            // Regular bounce
+                            player.vy = CONFIG.jumpForce;
+                            spawnParticles(player.x, player.y - player.radius, "#fff", 3);
+                        }
+                    }
+                }
+            }
+
+            // Platform Management (Update & Recycle)
+            // Remove platforms far below camera
+            for (let i = state.platforms.length - 1; i >= 0; i--) {
+                let p = state.platforms[i];
+                p.update();
+                if (p.y < state.cameraY - 100) {
+                    state.platforms.splice(i, 1);
+                }
+            }
+
+            // Generate new platforms
+            const highestPlatformY = state.platforms.length > 0 ? state.platforms[state.platforms.length - 1].y : 0;
+            if (highestPlatformY < state.cameraY + CONFIG.height * 1.5) {
+                generatePlatform(highestPlatformY + CONFIG.platformGapMin + Math.random() * (CONFIG.platformGapMax - CONFIG.platformGapMin));
+            }
+
+            // Particles
+            for (let i = state.particles.length - 1; i >= 0; i--) {
+                state.particles[i].update();
+                if (state.particles[i].life <= 0) state.particles.splice(i, 1);
+            }
+        }
+
+        function draw() {
+            // Clear Background
+            ctx.fillStyle = CONFIG.colors.bg;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Grid (Graph paper effect)
+            ctx.strokeStyle = CONFIG.colors.grid;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            const gridSize = 40;
+            const offset = Math.floor(state.cameraY) % gridSize;
+            // Verticals
+            for (let x = 0; x < CONFIG.width; x += gridSize) {
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, CONFIG.height);
+            }
+            // Horizontals (scrolling)
+            for (let y = -offset; y < CONFIG.height; y += gridSize) {
+                // y is screen coords (0 is top)
+                // We want the lines to move DOWN as camera moves UP.
+                // offset = cameraY % gridSize.
+                // screenY_line = (worldY - cameraY) converted.
+                // Let's just scroll the texture pattern.
+                // simpler:
+                let screenY = y;
+                // Actually, grid staying static is fine too, but scrolling looks better.
+                // If cameraY increases, details move DOWN.
+                // So offset moves lines down.
+                let scrollY = (gridSize - (state.cameraY % gridSize)) % gridSize;
+                for (let j = -1; j < CONFIG.height / gridSize + 1; j++) {
+                    let sy = j * gridSize + scrollY;
+                    ctx.moveTo(0, sy);
+                    ctx.lineTo(CONFIG.width, sy);
+                }
+            }
+            ctx.stroke();
+
+            // Platforms
+            state.platforms.forEach(p => p.draw(ctx, state.cameraY));
+
+            // Particles
+            state.particles.forEach(p => p.draw(ctx, state.cameraY));
+
+            // Player
+            if (state.isPlaying || !state.isGameOver) {
+                const screenY = CONFIG.height - (state.player.y - state.cameraY);
+
+                // Shadow (simple)
+                ctx.fillStyle = "rgba(0,0,0,0.1)";
+                ctx.beginPath();
+                ctx.ellipse(state.player.x, screenY + state.player.radius, state.player.radius * 0.8, 5, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Body
+                ctx.fillStyle = CONFIG.colors.player;
+                ctx.beginPath();
+                ctx.arc(state.player.x, screenY, state.player.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Eyes (Directional)
+                ctx.fillStyle = "white";
+                const eyeOffsetX = state.player.direction * 6;
+                ctx.beginPath();
+                ctx.arc(state.player.x + eyeOffsetX - 4, screenY - 2, 4, 0, Math.PI * 2);
+                ctx.arc(state.player.x + eyeOffsetX + 4, screenY - 2, 4, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Pupils
+                ctx.fillStyle = "black";
+                ctx.beginPath();
+                ctx.arc(state.player.x + eyeOffsetX - 3, screenY - 2, 1.5, 0, Math.PI * 2);
+                ctx.arc(state.player.x + eyeOffsetX + 5, screenY - 2, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Mouth
+                ctx.strokeStyle = "rgba(0,0,0,0.5)";
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(state.player.x + eyeOffsetX, screenY + 4, 3, 0, Math.PI);
+                ctx.stroke();
+
+                // Legs (simple lines reacting to jump)
+                ctx.strokeStyle = "#333";
+                ctx.lineWidth = 2;
+                const legOffset = state.player.vy > 0 ? 5 : 0; // Tuck legs when jumping up
+                ctx.beginPath();
+                ctx.moveTo(state.player.x - 5, screenY + 12);
+                ctx.lineTo(state.player.x - 5, screenY + state.player.radius - legOffset);
+                ctx.moveTo(state.player.x + 5, screenY + 12);
+                ctx.lineTo(state.player.x + 5, screenY + state.player.radius - legOffset);
+                ctx.stroke();
+            }
+        }
+
+        function gameLoop() {
+            if (!state.isPaused) {
+                update();
+                draw();
+            }
+            if (state.isPlaying || !state.isGameOver) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // --- Input Handling ---
+
+        // Tap/Touch
+        const handleStart = (x) => {
+            if (x < window.innerWidth / 2) {
+                state.input.left = true;
+                state.input.right = false;
+            } else {
+                state.input.left = false;
+                state.input.right = true;
+            }
+        };
+
+        const handleEnd = () => {
+            state.input.left = false;
+            state.input.right = false;
+        };
+
+        window.addEventListener('touchstart', (e) => {
+            // e.preventDefault(); // Handled by CSS touch-action mainly, but good practice if needed
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                handleStart(e.changedTouches[i].clientX);
+            }
+        }, { passive: false });
+
+        window.addEventListener('touchend', (e) => {
+            handleEnd();
+        });
+
+        // Mouse (for testing)
+        window.addEventListener('mousedown', (e) => {
+            if (e.target.tagName !== 'BUTTON') { // Prevent clicking buttons triggering movement
+                handleStart(e.clientX);
+            }
+        });
+        window.addEventListener('mouseup', handleEnd);
+
+        // Keyboard (for accessibility/testing)
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'ArrowLeft') state.input.left = true;
+            if (e.code === 'ArrowRight') state.input.right = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'ArrowLeft') state.input.left = false;
+            if (e.code === 'ArrowRight') state.input.right = false;
+        });
+
+
+        // --- UI Events ---
+        const startGameHandler = (e) => {
+            e.preventDefault(); // Prevent double firing if both click/touch fire
+            e.stopPropagation();
+            initGame();
+        };
+
+        startBtn.addEventListener('click', initGame);
+        startBtn.addEventListener('touchstart', startGameHandler, { passive: false });
+
+        restartBtn.addEventListener('click', initGame);
+        restartBtn.addEventListener('touchstart', startGameHandler, { passive: false });
+
+        // --- Global Integration ---
+        window.pauseGame = () => {
+            state.isPaused = true;
+        };
+
+        window.resumeGame = () => {
+            state.isPaused = false;
+        };
+
+        window.getGameState = () => {
+            return {
+                score: Math.floor(state.score),
+                highScore: state.highScore,
+                isGameOver: state.isGameOver,
+                isPlaying: state.isPlaying
+            };
+        };
+
+    </script>
+</body>
+
+</html>

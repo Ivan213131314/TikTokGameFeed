@@ -1,7 +1,9 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { StyleSheet, View, Text, PanResponder } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { GameModel } from '../types/GameModel';
+import { InteractionSidebar } from './InteractionSidebar';
+import { CommentsModal } from './CommentsModal';
 
 interface GameContainerProps {
     game: GameModel;
@@ -10,6 +12,8 @@ interface GameContainerProps {
 }
 
 export const GameContainer: React.FC<GameContainerProps> = ({ game, isActive, onSwipe }) => {
+    const [commentsVisible, setCommentsVisible] = useState(false);
+
     // 1. Configure PanResponder to intercept swipes
     const panResponder = useRef(
         PanResponder.create({
@@ -60,6 +64,18 @@ export const GameContainer: React.FC<GameContainerProps> = ({ game, isActive, on
                 )}
             />
 
+            <View style={styles.sidebar} pointerEvents="box-none">
+                <InteractionSidebar
+                    game={game}
+                    onCommentPress={() => setCommentsVisible(true)}
+                />
+            </View>
+
+            <CommentsModal
+                gameId={game.id}
+                visible={commentsVisible}
+                onClose={() => setCommentsVisible(false)}
+            />
         </View>
     );
 };
@@ -73,7 +89,13 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: 'transparent',
     },
-
+    sidebar: {
+        position: 'absolute',
+        right: 10,
+        top: 0,
+        bottom: 0,
+        justifyContent: 'center',
+    },
     errorContainer: {
         flex: 1,
         justifyContent: 'center',

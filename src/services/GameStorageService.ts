@@ -162,5 +162,135 @@ export const GameStorageService = {
                 html_content: defaultGameContent,
                 description: 'Classic falling blocks game',
             });
+    },
+
+    async toggleLike(gameId: string): Promise<boolean> {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Must be logged in to like");
+
+        // Check if already liked
+        const { data: existingLike } = await supabase
+            .from('likes')
+            .select('id')
+            .eq('game_id', gameId)
+            .eq('user_id', user.id)
+            .single();
+
+        if (existingLike) {
+            // Unlike
+            await supabase.from('likes').delete().eq('id', existingLike.id);
+            return false;
+        } else {
+            // Like
+            await supabase.from('likes').insert({ game_id: gameId, user_id: user.id });
+            return true;
+        }
+    },
+
+    async getGameStats(gameId: string): Promise<import('../types/SocialModels').GameStats> {
+        const { count: likesCount } = await supabase
+            .from('likes')
+            .select('id', { count: 'exact', head: true })
+            .eq('game_id', gameId);
+
+        const { count: commentsCount } = await supabase
+            .from('comments')
+            .select('id', { count: 'exact', head: true })
+            .eq('game_id', gameId);
+
+        let isLiked = false;
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            const { data } = await supabase
+                .from('likes')
+                .select('id')
+                .eq('game_id', gameId)
+                .eq('user_id', user.id)
+                .maybeSingle(); // Use maybeSingle to avoid 406 error if not found
+            isLiked = !!data;
+        }
+
+        return {
+            likesCount: likesCount || 0,
+            commentsCount: commentsCount || 0,
+            isLiked
+        };
+    },
+
+    async getComments(gameId: string): Promise<import('../types/SocialModels').CommentModel[]> {
+        const { data, error } = await supabase
+            .from('comments')
+            .select(`
+                *,
+                profiles:user_id (username, avatar_url)
+            `)
+            .eq('game_id', gameId)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error(error);
+            return [];
+        }
+
+        return data.map((c: any) => ({
+            id: c.id,
+            game_id: c.game_id,
+            user_id: c.user_id,
+            content: c.content,
+            created_at: new Date(c.created_at).getTime(),
+            user: c.profiles ? {
+                username: c.profiles.username || 'Unknown',
+                avatar_url: c.profiles.avatar_url
+            } : undefined
+        }));
+    },
+
+    async addComment(gameId: string, content: string): Promise<import('../types/SocialModels').CommentModel> {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Must be logged in to comment");
+
+        const { data, error } = await supabase
+            .from('comments')
+            .insert({
+                game_id: gameId,
+                user_id: user.id,
+                content: content
+            })
+            .select(`
+                *,
+                profiles:user_id (username, avatar_url)
+            `) // Select with profile to return complete model
+            .single();
+
+        if (error) throw error;
+
+        return {
+            id: data.id,
+            game_id: data.game_id,
+            user_id: data.user_id,
+            content: data.content,
+            created_at: new Date(data.created_at).getTime(),
+            user: data.profiles ? {
+                username: data.profiles.username || 'Unknown',
+                avatar_url: data.profiles.avatar_url
+            } : undefined
+        };
+    },
+
+    async getUserProfile(userId: string): Promise<import('../types/SocialModels').ProfileModel | null> {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single();
+
+        if (error) return null;
+
+        return {
+            id: data.id,
+            username: data.username,
+            avatar_url: data.avatar_url,
+            created_at: new Date(data.created_at).getTime()
+        };
     }
 };
