@@ -226,8 +226,8 @@
             if (player) player.update(clientX);
         }
 
-        canvas.addEventListener('touchstart', handleInput, { passive: false });
-        canvas.addEventListener('touchmove', handleInput, { passive: false });
+        //canvas.addEventListener('touchstart', handleInput, { passive: false });
+        //canvas.addEventListener('touchmove', handleInput, { passive: false });
         canvas.addEventListener('mousemove', (e) => {
             if (e.buttons === 1) handleInput(e);
         });

@@ -7,10 +7,14 @@ import { useFocusEffect } from 'expo-router';
 import { GameContainer } from '../../src/components/GameContainer';
 import { Ionicons } from '@expo/vector-icons';
 
+import { useRef } from 'react';
+// ... other imports
+
 export default function GameFeedScreen() {
   const { height } = useWindowDimensions();
   const [games, setGames] = useState<GameModel[]>([]);
   const [activePage, setActivePage] = useState(0);
+  const flatListRef = useRef<FlatList>(null);
 
   // Create an "infinite" list by repeating the games multiple times
   const infiniteGames = useMemo(() => {
@@ -37,6 +41,15 @@ export default function GameFeedScreen() {
     }
   }, []);
 
+  const handleSwipe = useCallback((currentIndex: number, direction: 'up' | 'down') => {
+    const nextIndex = direction === 'up' ? currentIndex + 1 : currentIndex - 1;
+
+    // Bounds check
+    if (nextIndex >= 0 && nextIndex < infiniteGames.length) {
+      flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+    }
+  }, [infiniteGames.length]);
+
   const viewabilityConfig = {
     itemVisiblePercentThreshold: 50
   };
@@ -54,10 +67,15 @@ export default function GameFeedScreen() {
   return (
     <View style={styles.container}>
       <FlatList
+        ref={flatListRef}
         data={infiniteGames}
         renderItem={({ item, index }) => (
           <View style={[styles.page, { height }]}>
-            <GameContainer game={item} isActive={activePage === index} />
+            <GameContainer
+              game={item}
+              isActive={activePage === index}
+              onSwipe={(dir) => handleSwipe(index, dir)}
+            />
           </View>
         )}
         keyExtractor={(item, index) => `${item.id}_${index}`}
@@ -70,6 +88,7 @@ export default function GameFeedScreen() {
         initialNumToRender={3}
         maxToRenderPerBatch={3}
         windowSize={5}
+        scrollEnabled={false} // Disable native scroll, we drive it manually now!
       />
     </View>
   );
