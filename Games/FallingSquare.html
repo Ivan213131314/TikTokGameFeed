@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            overflow: hidden;
+            color: white;
+            font-family: Arial, sans-serif;
+            touch-action: pan-y;
+            user-select: none;
+            -webkit-user-select: none;
+            /* Prevent default touch actions like scrolling */
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            pointer-events: none;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        #score {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            display: none;
+        }
+
+        button {
+            background: white;
+            color: black;
+            border: none;
+            padding: 10px 20px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 20px;
+            border-radius: 5px;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui">
+        <div id="score">Score: 0</div>
+    </div>
+    <div id="gameOver">
+        <h1>GAME OVER</h1>
+        <p>Score: <span id="finalScore">0</span></p>
+        <button onclick="startGame()">RESTART</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const gameOverEl = document.getElementById('gameOver');
+        const finalScoreEl = document.getElementById('finalScore');
+
+        let width, height;
+        let player;
+        let blocks = [];
+        let score = 0;
+        let gameRunning = false;
+        let speedMultiplier = 1;
+        let animationId;
+        let lastTime = 0;
+        let spawnTimer = 0;
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            if (player) player.y = height - 100;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Player {
+            constructor() {
+                this.size = 50;
+                this.x = width / 2 - this.size / 2;
+                this.y = height - 100;
+                this.color = '#00ffcc';
+                this.isDragging = false;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+            }
+
+            update(inputX) {
+                if (inputX !== null) {
+                    this.x = inputX - this.size / 2;
+                }
+                // Clamp to screen
+                if (this.x < 0) this.x = 0;
+                if (this.x + this.size > width) this.x = width - this.size;
+            }
+        }
+
+        class Block {
+            constructor() {
+                this.size = Math.random() * 40 + 30; // 30-70px
+                this.x = Math.random() * (width - this.size);
+                this.y = -this.size;
+                this.speed = (Math.random() * 2 + 3) * speedMultiplier;
+                this.color = `hsl(${Math.random() * 360}, 70%, 50%)`;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+            }
+
+            update() {
+                this.y += this.speed;
+            }
+        }
+
+        function startGame() {
+            player = new Player();
+            blocks = [];
+            score = 0;
+            speedMultiplier = 1;
+            scoreEl.innerText = 'Score: 0';
+            gameOverEl.style.display = 'none';
+            gameRunning = true;
+            lastTime = performance.now();
+            if (animationId) cancelAnimationFrame(animationId);
+            loop(lastTime);
+        }
+
+        function loop(timestamp) {
+            if (!gameRunning) return;
+            const dt = timestamp - lastTime;
+            lastTime = timestamp;
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'; // Trail effect
+            ctx.fillRect(0, 0, width, height);
+
+            // Spawn blocks
+            spawnTimer += dt;
+            if (spawnTimer > 1000 / speedMultiplier) {
+                blocks.push(new Block());
+                spawnTimer = 0;
+            }
+
+            // Increase difficulty
+            speedMultiplier += 0.0001 * dt;
+
+            // Update blocks
+            for (let i = blocks.length - 1; i >= 0; i--) {
+                let b = blocks[i];
+                b.update();
+                b.draw();
+
+                // Collision
+                if (
+                    player.x < b.x + b.size &&
+                    player.x + player.size > b.x &&
+                    player.y < b.y + b.size &&
+                    player.y + player.size > b.y
+                ) {
+                    gameOver();
+                }
+
+                // Remove off-screen
+                if (b.y > height) {
+                    blocks.splice(i, 1);
+                    score++;
+                    scoreEl.innerText = 'Score: ' + score;
+                }
+            }
+
+            player.draw();
+
+            animationId = requestAnimationFrame(loop);
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            gameOverEl.style.display = 'block';
+            finalScoreEl.innerText = score;
+        }
+
+        // Input handling
+        let inputX = null;
+
+        function handleInput(e) {
+            // Only prevent default if we are actually interacting with the game horizontally? 
+            // Actually, for vertical swipe to bubble to FlatList, we probably should NOT prevent default.
+            // But we need to check if we are horizontal dragging vs vertical swiping.
+            // e.preventDefault(); <--- REMOVED
+            let clientX;
+            if (e.touches) {
+                clientX = e.touches[0].clientX;
+            } else {
+                clientX = e.clientX;
+            }
+            if (player) player.update(clientX);
+        }
+
+        canvas.addEventListener('touchstart', handleInput, { passive: false });
+        canvas.addEventListener('touchmove', handleInput, { passive: false });
+        canvas.addEventListener('mousemove', (e) => {
+            if (e.buttons === 1) handleInput(e);
+        });
+
+        // Initial start
+        startGame();
+
+    </script>
+</body>
+
+</html>
