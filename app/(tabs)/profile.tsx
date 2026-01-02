@@ -1,19 +1,33 @@
-import { StyleSheet, Text, View, TouchableOpacity, FlatList, SafeAreaView, RefreshControl, Alert } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, FlatList, SafeAreaView, RefreshControl, Alert, Image, Modal, ScrollView } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { Colors } from '../../src/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { GameModel } from '../../src/types/GameModel';
 import { GameStorageService } from '../../src/services/GameStorageService';
+import { AVATAR_ASSETS, getAvatarSource } from '../../src/constants/Avatars';
 import { useState, useEffect, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
 import Auth from '../../src/components/Auth';
 
+import { GAME_ICONS } from '../../assets/game-icons';
+
+const getIconIndex = (id: string, count: number) => {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+        hash = ((hash << 5) - hash) + id.charCodeAt(i);
+        hash |= 0; // Convert to 32bit integer
+    }
+    return Math.abs(hash) % count;
+};
+
 export default function ProfileScreen() {
     const [session, setSession] = useState<Session | null>(null);
     const [games, setGames] = useState<GameModel[]>([]);
     const [refreshing, setRefreshing] = useState(false);
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+    const [modalVisible, setModalVisible] = useState(false);
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -31,6 +45,11 @@ export default function ProfileScreen() {
         if (!session?.user) return;
         const loadedGames = await GameStorageService.getUserGames(session.user.id);
         setGames(loadedGames);
+
+        const profile = await GameStorageService.getUserProfile(session.user.id);
+        if (profile?.avatar_url) {
+            setAvatarUrl(profile.avatar_url);
+        }
     };
 
     useFocusEffect(
@@ -66,6 +85,25 @@ export default function ProfileScreen() {
         }
     };
 
+    const handleAvatarPress = () => {
+        setModalVisible(true);
+    };
+
+    const selectAvatar = async (key: string) => {
+        if (!session?.user) return;
+
+        const newAvatarUrl = `asset:${key}`;
+        setAvatarUrl(newAvatarUrl); // Optimistic update
+        setModalVisible(false);
+
+        try {
+            await GameStorageService.updateUserProfile(session.user.id, { avatar_url: newAvatarUrl });
+        } catch (e) {
+            console.error("Failed to update profile", e);
+            Alert.alert("Error", "Failed to save avatar");
+        }
+    };
+
     const deleteGame = async (id: string) => {
         Alert.alert(
             "Delete Game",
@@ -91,7 +129,16 @@ export default function ProfileScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <Ionicons name="person-circle-outline" size={80} color={Colors.text} />
+                <TouchableOpacity onPress={handleAvatarPress} style={styles.avatarWrapper}>
+                    {avatarUrl ? (
+                        <Image source={getAvatarSource(avatarUrl)} style={styles.avatarImage} />
+                    ) : (
+                        <Ionicons name="person-circle-outline" size={80} color={Colors.text} />
+                    )}
+                    <View style={styles.redKeyContainer}>
+                        <Ionicons name="key" size={12} color="white" />
+                    </View>
+                </TouchableOpacity>
                 <Text style={styles.username}>{session.user.email?.split('@')[0]}</Text>
                 <Text style={styles.stats}>{games.length} Games • 0 Likes</Text>
                 <TouchableOpacity style={styles.signOutBtn} onPress={() => supabase.auth.signOut()}>
@@ -126,10 +173,13 @@ export default function ProfileScreen() {
                         renderItem={({ item }) => (
                             <View style={styles.gameItem}>
                                 <View style={styles.gameIcon}>
-                                    <Ionicons name="code-slash" size={24} color={Colors.text} />
+                                    <Image
+                                        source={GAME_ICONS[getIconIndex(item.id, GAME_ICONS.length)]}
+                                        style={styles.gameIconImage}
+                                    />
                                 </View>
                                 <View style={styles.gameInfo}>
-                                    <Text style={styles.gameName}>{item.name}</Text>
+                                    <Text style={styles.gameName}>{item.name.replace(/\.html$/i, '')}</Text>
                                     <Text style={styles.gameDate}>{new Date(item.dateAdded).toLocaleDateString()}</Text>
                                 </View>
                                 <TouchableOpacity onPress={() => deleteGame(item.id)}>
@@ -140,6 +190,31 @@ export default function ProfileScreen() {
                     />
                 )}
             </View>
+
+            <Modal
+                visible={modalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Choose Avatar</Text>
+                            <TouchableOpacity onPress={() => setModalVisible(false)}>
+                                <Ionicons name="close" size={24} color={Colors.text} />
+                            </TouchableOpacity>
+                        </View>
+                        <ScrollView contentContainerStyle={styles.avatarGrid} showsVerticalScrollIndicator={false}>
+                            {Object.keys(AVATAR_ASSETS).map((key) => (
+                                <TouchableOpacity key={key} onPress={() => selectAvatar(key)} style={styles.avatarGridItem}>
+                                    <Image source={AVATAR_ASSETS[key]} style={styles.gridAvatarImage} />
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -243,11 +318,17 @@ const styles = StyleSheet.create({
     gameIcon: {
         width: 40,
         height: 40,
-        backgroundColor: '#333',
+        backgroundColor: 'transparent',
         borderRadius: 8,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 12,
+        overflow: 'hidden',
+    },
+    gameIconImage: {
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover',
     },
     gameInfo: {
         flex: 1,
@@ -262,4 +343,67 @@ const styles = StyleSheet.create({
         fontSize: 12,
         marginTop: 2,
     },
+    avatarWrapper: {
+        position: 'relative',
+        width: 80,
+        height: 80,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    avatarImage: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+    },
+    redKeyContainer: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        backgroundColor: '#FE2C55', // TikTok Red
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: Colors.background,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        backgroundColor: '#1E1E1E',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        padding: 20,
+        maxHeight: '60%',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    modalTitle: {
+        color: Colors.text,
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    avatarGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+    },
+    avatarGridItem: {
+        width: '23%',
+        aspectRatio: 1,
+        marginBottom: 15,
+    },
+    gridAvatarImage: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 10,
+    }
 });

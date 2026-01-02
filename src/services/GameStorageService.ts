@@ -292,5 +292,58 @@ export const GameStorageService = {
             avatar_url: data.avatar_url,
             created_at: new Date(data.created_at).getTime()
         };
+    },
+
+    async uploadAvatar(userId: string, imageUri: string): Promise<string | null> {
+        try {
+            // Use expo-file-system to read as base64
+            const FileSystem = require('expo-file-system');
+            const { decode } = require('../utils/fileUtils');
+
+            const base64 = await FileSystem.readAsStringAsync(imageUri, {
+                encoding: 'base64',
+            });
+            const arrayBuffer = decode(base64);
+
+            // Determine file extension
+            const ext = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
+            const fileName = `${userId}_${Date.now()}.${ext}`;
+            const filePath = `${fileName}`;
+            const contentType = `image/${ext === 'png' ? 'png' : 'jpeg'}`;
+
+            // Upload blob/buffer
+            const { data, error } = await supabase.storage
+                .from('avatars')
+                .upload(filePath, arrayBuffer, {
+                    contentType,
+                    upsert: true
+                });
+
+            if (error) {
+                console.error("Error uploading avatar:", error);
+                throw error;
+            }
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('avatars')
+                .getPublicUrl(filePath);
+
+            return publicUrl;
+        } catch (e) {
+            console.error("Avatar upload failed:", e);
+            return null;
+        }
+    },
+
+    async updateUserProfile(userId: string, updates: { avatar_url?: string }): Promise<void> {
+        const { error } = await supabase
+            .from('profiles')
+            .update(updates)
+            .eq('id', userId);
+
+        if (error) {
+            console.error("Error updating profile:", error);
+            throw error;
+        }
     }
 };
