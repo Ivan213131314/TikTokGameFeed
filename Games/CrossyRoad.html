@@ -1,60 +1,35 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Crossy Road Clone</title>
+    <title>Перейди дорогу</title>
     <style>
-        :root {
-            --primary: #6C5CE7;
-            --background: #1a1a1a;
-            --surface: #2d2d2d;
-            --text: #ffffff;
-            --success: #00b894;
-            --danger: #d63031;
-        }
-
-        * {
-            box-sizing: border-box;
-            user-select: none;
-            -webkit-user-select: none;
-            touch-action: none;
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap');
 
         body {
             margin: 0;
             padding: 0;
-            background-color: var(--background);
-            color: var(--text);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
+            background-color: #87CEEB;
+            /* Небо */
+            font-family: 'Fredoka One', cursive;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
         }
 
         #game-container {
             position: relative;
-            width: 100%;
-            height: 100%;
-            max-width: 600px;
-            /* Tablet/Desktop limit */
-            background-color: #81ecec;
-            /* Sky/Water default */
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
+            width: 100vw;
+            height: 100vh;
+            background: #a2d149;
+            /* Цвет травы по умолчанию */
         }
 
         canvas {
             display: block;
-            width: 100%;
-            flex: 1;
-            image-rendering: pixelated;
-            /* Retro feel */
         }
 
         #ui-layer {
@@ -64,146 +39,139 @@
             width: 100%;
             height: 100%;
             pointer-events: none;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            padding: 20px;
-        }
-
-        .score-display {
-            font-size: 2rem;
-            font-weight: bold;
-            text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
-            text-align: left;
-        }
-
-        .best-score {
-            font-size: 1rem;
-            opacity: 0.8;
-        }
-
-        #screen-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            pointer-events: auto;
-            backdrop-filter: blur(5px);
-            transition: opacity 0.3s ease;
             z-index: 10;
         }
 
-        #screen-overlay.hidden {
-            opacity: 0;
-            pointer-events: none;
+        #score-board {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 10px;
+            color: white;
+            font-size: 24px;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        .modal {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #fff;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            border: 4px solid #333;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+            pointer-events: auto;
+            display: none;
+            width: 80%;
+            max-width: 320px;
+        }
+
+        .modal.active {
+            display: block;
         }
 
         h1 {
-            font-size: 3rem;
-            margin: 0 0 20px 0;
-            color: #fdcb6e;
-            text-shadow: 3px 3px 0 #d63031;
-            text-align: center;
-            line-height: 1;
+            margin: 0 0 15px;
+            color: #333;
+            font-size: 28px;
         }
 
-        .btn {
-            background: var(--primary);
+        p {
+            color: #666;
+            font-size: 18px;
+            margin-bottom: 20px;
+        }
+
+        button.action-btn {
+            background: #4CAF50;
             color: white;
             border: none;
-            padding: 15px 40px;
-            font-size: 1.5rem;
-            border-radius: 50px;
+            padding: 15px 30px;
+            font-size: 20px;
+            border-radius: 8px;
             cursor: pointer;
-            box-shadow: 0 4px 15px rgba(108, 92, 231, 0.4);
-            transition: transform 0.1s, box-shadow 0.1s;
-            font-weight: bold;
-            text-transform: uppercase;
+            border-bottom: 4px solid #2E7D32;
+            font-family: 'Fredoka One', cursive;
+            transition: transform 0.1s;
+            width: 100%;
         }
 
-        .btn:active {
-            transform: scale(0.95);
-            box-shadow: 0 2px 5px rgba(108, 92, 231, 0.4);
+        button.action-btn:active {
+            transform: translateY(2px);
+            border-bottom: 2px solid #2E7D32;
         }
 
-        #controls-area {
+        /* --- Кнопки управления (D-Pad) --- */
+        .d-pad-container {
             position: absolute;
-            bottom: 20px;
+            bottom: 30px;
             left: 0;
             width: 100%;
             height: 180px;
             pointer-events: none;
-            /* Let clicks pass through if not on buttons */
             display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
+            justify-content: center;
             align-items: center;
-            padding-bottom: 20px;
-            z-index: 5;
+            z-index: 20;
         }
 
         .d-pad {
             position: relative;
             width: 180px;
-            height: 120px;
-            pointer-events: auto;
+            height: 180px;
         }
 
         .d-btn {
             position: absolute;
             width: 60px;
             height: 60px;
-            background: rgba(255, 255, 255, 0.3);
-            border: 2px solid rgba(255, 255, 255, 0.5);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            backdrop-filter: blur(2px);
-            transition: background 0.1s;
-        }
-
-        .d-btn:active {
             background: rgba(255, 255, 255, 0.6);
+            /* Полупрозрачный белый */
+            border-radius: 15px;
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 30px;
+            color: #333;
+            pointer-events: auto;
+            cursor: pointer;
+            user-select: none;
+            box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
+            transition: transform 0.1s, background 0.1s, box-shadow 0.1s;
+            backdrop-filter: blur(2px);
         }
 
-        .d-btn svg {
-            width: 30px;
-            height: 30px;
-            fill: white;
-            filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+        .d-btn:active,
+        .d-btn.pressed {
+            background: rgba(255, 255, 255, 0.9);
+            transform: translateY(4px);
+            box-shadow: 0 0 0 rgba(0, 0, 0, 0.2);
         }
 
-        .d-up {
+        .btn-up {
             top: 0;
             left: 60px;
         }
 
-        .d-left {
-            bottom: 0;
-            left: 0;
-        }
-
-        .d-down {
+        .btn-down {
             bottom: 0;
             left: 60px;
         }
 
-        .d-right {
-            bottom: 0;
-            right: 0;
+        .btn-left {
+            top: 60px;
+            left: 0;
         }
 
-        /* Hide controls on desktop if keyboard is preferred, but user asked for on-screen buttons */
-        @media (min-width: 768px) {
-            /* Optional: Make controls smaller or hint keyboard usage */
+        .btn-right {
+            top: 60px;
+            right: 0;
         }
     </style>
 </head>
@@ -213,652 +181,470 @@
     <div id="game-container">
         <canvas id="gameCanvas"></canvas>
 
-        <div id="ui-layer">
-            <div>
-                <div class="score-display" id="currentScore">0</div>
-                <div class="best-score" id="bestScore">BEST: 0</div>
-            </div>
-        </div>
-
-        <div id="controls-area">
+        <!-- Визуальные стрелки управления -->
+        <div class="d-pad-container">
             <div class="d-pad">
-                <div class="d-btn d-up" data-dir="up">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z" />
-                    </svg>
-                </div>
-                <div class="d-btn d-left" data-dir="left">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
-                    </svg>
-                </div>
-                <div class="d-btn d-down" data-dir="down">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
-                    </svg>
-                </div>
-                <div class="d-btn d-right" data-dir="right">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
-                    </svg>
-                </div>
+                <div class="d-btn btn-up" data-dir="up">▲</div>
+                <div class="d-btn btn-left" data-dir="left">◀</div>
+                <div class="d-btn btn-right" data-dir="right">▶</div>
+                <div class="d-btn btn-down" data-dir="down">▼</div>
             </div>
         </div>
 
-        <div id="screen-overlay">
-            <h1 id="screen-title">CROSSY<br>CLONE</h1>
-            <p id="final-score" style="display:none; font-size: 1.5rem; margin-bottom: 20px;">Score: 0</p>
-            <button class="btn" id="action-btn">PLAY</button>
+        <div id="ui-layer">
+            <div id="score-board">0</div>
+
+            <div id="start-screen" class="modal active">
+                <h1>Crossy Road</h1>
+                <p>Перейди дорогу, не попади под машину и не утони!</p>
+                <button class="action-btn" onclick="startGame()">ИГРАТЬ</button>
+            </div>
+
+            <div id="game-over-screen" class="modal">
+                <h1 style="color: #e74c3c;">СБИТ!</h1>
+                <p>Счёт: <span id="final-score">0</span></p>
+                <button class="action-btn" onclick="startGame()">ЗАНОВО</button>
+            </div>
         </div>
     </div>
 
     <script>
-        /**
-         * Crossy Road Clone Logic
-         */
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score-board');
+        const finalScoreEl = document.getElementById('final-score');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const gameOverTitle = gameOverScreen.querySelector('h1');
 
-        // Game Constants
-        const TILE_SIZE = 40; // Base tile size, will scale
-        let SCALE = 1;
-        const VIEW_WIDTH = 13; // Tiles horizontal (odd number to center player)
-        const VIEW_HEIGHT = 15; // Tiles vertical
+        // Настройки
+        const GRID_SIZE = 40; // Размер клетки
+        let COLS = 10;
+        let ROWS = 15;
 
-        // Colors
-        const COLORS = {
-            GRASS_LIGHT: '#55efc4',
-            GRASS_DARK: '#00b894',
-            ROAD: '#636e72',
-            WATER: '#74b9ff', // Light blue
-            PLAYER: '#fdcb6e', // Chick yellow
-            PLAYER_SHADE: '#fab1a0',
-            CAR: ['#ff7675', '#0984e3', '#e17055', '#6c5ce7'],
-            LOG: '#a29bfe', // Wood color...ish
-            TREE: '#00cec9'  // Tree color
+        // Состояние игры
+        let animationId;
+        let gameActive = false;
+        let frameCount = 0;
+        let score = 0;
+        let maxDistance = 0; // Самая дальняя точка, куда дошел игрок
+        let speedMultiplier = 1;
+
+        // Игрок
+        const player = {
+            gridX: 0, // Логическая позиция X
+            gridY: 0, // Логическая позиция Y (прогресс вперед)
+            x: 0,     // Визуальная позиция (для анимации)
+            y: 0,
+            targetX: 0,
+            targetY: 0,
+            width: GRID_SIZE - 10,
+            height: GRID_SIZE - 10,
+            color: '#fff', // Курица белая
+            isDead: false,
+            onLog: false,
+            logSpeed: 0
         };
 
-        // State & Integration
-        const state = {
-            isPlaying: false,
-            isPaused: false,
-            isGameOver: false,
-            score: 0,
-            bestScore: parseInt(localStorage.getItem('crossy_best') || '0'),
-            player: {
-                x: 6, // Center of 13 tiles (0-12)
-                y: 0, // Starts at 0, moving up increments y
-                moveTargetX: 6,
-                moveTargetY: 0,
-                isMoving: false,
-                moveProgress: 0,
-                direction: 'up', // 'up', 'down', 'left', 'right'
-                width: 0.8,
-                height: 0.8
-            },
-            camera: {
-                y: 0
-            },
-            lanes: [], // Array of lane objects
-            lastTime: 0,
-            frameCount: 0,
-            difficulty: 1
-        };
+        // Мир (Лейны)
+        let lanes = []; // Массив полос препятствий
+        const LANE_TYPES = ['grass', 'road', 'river'];
 
-        // DOM Elements
-        const uiScore = document.getElementById('currentScore');
-        const uiBest = document.getElementById('bestScore');
-        const overlay = document.getElementById('screen-overlay');
-        const screenTitle = document.getElementById('screen-title');
-        const finalScoreDisplay = document.getElementById('final-score');
-        const actionBtn = document.getElementById('action-btn');
+        // Камера
+        let cameraY = 0;
 
-        // Initial Setup
-        function init() {
-            resize();
-            window.addEventListener('resize', resize);
-            setupInput();
-            updateUI();
-
-            // Generate initial safe zone
-            for (let i = 0; i < 10; i++) {
-                addLane(i, 'grass');
-            }
-            // Generate some initial world
-            for (let i = 10; i < 30; i++) {
-                generateLane(i);
-            }
-
-            requestAnimationFrame(loop);
-        }
-
+        // Инициализация размеров
         function resize() {
-            const container = document.getElementById('game-container');
-            const cw = container.clientWidth;
-            const ch = container.clientHeight;
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            COLS = Math.floor(canvas.width / GRID_SIZE);
+            ROWS = Math.floor(canvas.height / GRID_SIZE) + 2; // +2 для буфера
+        }
+        window.addEventListener('resize', resize);
+        resize();
 
-            canvas.width = cw;
-            canvas.height = ch;
+        // --- Обработка ввода (Кнопки и Тач) ---
+        function handleInput(direction) {
+            if (!gameActive || player.isDead) return;
 
-            // Calculate Scale to fit VIEW_WIDTH tiles horizontally
-            SCALE = cw / (VIEW_WIDTH * TILE_SIZE);
-            if (SCALE < 0.5) SCALE = 0.5;
+            let nextX = player.gridX;
+            let nextY = player.gridY;
 
-            // Adjust camera drawing context
-            // actually we will handle scaling in draw()
+            if (direction === 'up') nextY++;
+            if (direction === 'down') nextY--;
+            if (direction === 'left') nextX--;
+            if (direction === 'right') nextX++;
+
+            // Ограничения
+            if (nextX < 0) nextX = 0;
+            if (nextX >= COLS) nextX = COLS - 1;
+            if (nextY < 0) nextY = 0; // Нельзя идти назад за старт
+
+            // Движение игрока
+            player.gridX = nextX;
+            player.gridY = nextY;
+
+            // Обновляем счет
+            if (player.gridY > maxDistance) {
+                maxDistance = player.gridY;
+                score = maxDistance;
+                scoreEl.innerText = score;
+            }
+
+            // Генерация новых лейнов если подходим к краю
+            while (lanes.length <= player.gridY + ROWS) {
+                lanes.push(new Lane(lanes.length));
+            }
+
+            updatePlayerVisuals();
         }
 
-        // Lane Generation
-        const LANE_TYPES = ['grass', 'road', 'road', 'road', 'water', 'water', 'grass'];
+        // Привязка событий к кнопкам на экране
+        const buttons = document.querySelectorAll('.d-btn');
+        buttons.forEach(btn => {
+            const dir = btn.dataset.dir;
 
-        function generateLane(yIndex) {
-            // Logic to determine lane type based on difficulty and randomness
-            // Prevent impossible sections (e.g., 5 water lanes in a row)
+            const triggerInput = (e) => {
+                // e.preventDefault(); // Предотвращаем стандартное поведение (зум, скролл)
+                if (e.cancelable) e.preventDefault();
+                handleInput(dir);
 
-            let type = 'grass';
-
-            // Basic procedural weights
-            const r = Math.random();
-            const prevLane = state.lanes[yIndex - 1]; // Note: lanes map y-index to lane. We use an array where index matches Y? No, infinite.
-            // We need a map or sparse array. Let's use an array where index 0 is y=0.
-            // Actually, since we only need lanes around the player, we can keep an array and offset.
-            // BUT simpler: Array where index = y.
-
-            // Check previous lanes to avoid impossible clumps
-            let consecutiveRoads = 0;
-            let consecutiveWater = 0;
-
-            // Look back
-            let lookBack = 1;
-            while (state.lanes[yIndex - lookBack] && state.lanes[yIndex - lookBack].type === 'road') {
-                consecutiveRoads++;
-                lookBack++;
-            }
-            lookBack = 1;
-            while (state.lanes[yIndex - lookBack] && state.lanes[yIndex - lookBack].type === 'water') {
-                consecutiveWater++;
-                lookBack++;
-            }
-
-            if (consecutiveRoads > 3) type = 'grass';
-            else if (consecutiveWater > 2) type = 'grass';
-            else {
-                // Random selection
-                const choices = ['grass', 'road', 'road', 'water', 'water'];
-                if (state.score < 10) choices.push('grass', 'grass'); // Easier start
-                type = choices[Math.floor(Math.random() * choices.length)];
-            }
-
-            addLane(yIndex, type);
-        }
-
-        function addLane(y, type) {
-            // Lane properties
-            const lane = {
-                y: y,
-                type: type,
-                objects: [],
-                speed: 0,
-                direction: 1 // 1 = right, -1 = left
+                // Визуальный эффект нажатия (класс pressed)
+                btn.classList.add('pressed');
+                setTimeout(() => btn.classList.remove('pressed'), 100);
             };
 
-            if (type === 'road') {
-                lane.speed = (2 + Math.random() * 2 + (state.score / 50)) * (Math.random() > 0.5 ? 1 : -1);
-                lane.direction = Math.sign(lane.speed);
-                // Add initial cars
-                addLaneObjects(lane, 'car');
-            } else if (type === 'water') {
-                lane.speed = (1.5 + Math.random() * 1.5 + (state.score / 60)) * (Math.random() > 0.5 ? 1 : -1);
-                lane.direction = Math.sign(lane.speed);
-                addLaneObjects(lane, 'log');
-            } else if (type === 'grass') {
-                // Add trees statically
-                addLaneObjects(lane, 'tree');
-            }
+            // touchstart работает быстрее click на мобильных
+            btn.addEventListener('touchstart', triggerInput, { passive: false });
+            btn.addEventListener('mousedown', triggerInput);
+        });
 
-            state.lanes[y] = lane;
-        }
+        // Клавиатура
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowUp') handleInput('up');
+            if (e.key === 'ArrowDown') handleInput('down');
+            if (e.key === 'ArrowLeft') handleInput('left');
+            if (e.key === 'ArrowRight') handleInput('right');
+        });
 
-        function addLaneObjects(lane, objType) {
-            // Density
-            let density = 0.3; // Default chance per tile
-            if (objType === 'car') {
-                // Determine spacing. Cars need gaps.
-                // We'll generate a pattern or random placement with min gap.
-                let nextX = -5;
-                while (nextX < VIEW_WIDTH + 5) {
-                    const gap = 3 + Math.random() * 6; // Gap between cars
-                    nextX += gap;
-                    if (nextX < VIEW_WIDTH + 5) {
-                        lane.objects.push({
-                            x: nextX,
-                            y: lane.y,
-                            type: 'car',
-                            width: 1, // Tile width
-                            height: 0.8,
-                            color: COLORS.CAR[Math.floor(Math.random() * COLORS.CAR.length)]
-                        });
-                    }
-                }
-            } else if (objType === 'log') {
-                let nextX = -5;
-                while (nextX < VIEW_WIDTH + 5) {
-                    const length = 2 + Math.floor(Math.random() * 2); // Log length 2 or 3
-                    const gap = 2 + Math.random() * 3;
-                    nextX += gap; // Gap first
-                    if (nextX < VIEW_WIDTH + 5) {
-                        lane.objects.push({
-                            x: nextX,
-                            y: lane.y,
-                            type: 'log',
-                            width: length,
-                            height: 0.8,
-                            color: COLORS.LOG
-                        });
-                        nextX += length; // Advance past log
-                    }
-                }
-            } else if (objType === 'tree') {
-                for (let x = -2; x < VIEW_WIDTH + 2; x++) {
-                    // Don't block the path completely.
-                    // Randomly place trees, but ensure at least one open path in 13 tiles?
-                    // Actually, Crossy Road trees are random but usually density is low enough.
-                    // To ensure passability, we could check connectivity, but for this clone, simple random with low density is fine.
-                    // Ensure the player's start column isn't blocked immediately if it's nearby?
-                    if (Math.random() < 0.15) {
-                        lane.objects.push({
-                            x: x,
-                            y: lane.y,
-                            type: 'tree',
-                            width: 0.8,
-                            height: 0.8,
-                            color: COLORS.TREE
-                        });
-                    }
+
+        // --- Классы ---
+
+        class Lane {
+            constructor(index) {
+                this.index = index; // Y индекс в мире (0, 1, 2...)
+                this.obstacles = [];
+                this.type = this.getType(index);
+
+                // Настройки препятствий
+                // Сложность растет каждые 20 шагов
+                this.difficulty = Math.min(index / 100, 1) + 1;
+                this.direction = Math.random() < 0.5 ? 1 : -1;
+                this.speed = (Math.random() * 1.5 + 1.5) * this.difficulty;
+
+                if (this.type === 'road') {
+                    this.initCars();
+                } else if (this.type === 'river') {
+                    this.speed *= 0.8; // Бревна чуть медленнее
+                    this.initLogs();
                 }
             }
-        }
 
-        // Input
-        function setupInput() {
-            // Keyboard
-            window.addEventListener('keydown', (e) => {
-                if (state.isPaused || state.isGameOver) return;
+            getType(index) {
+                if (index < 3) return 'grass'; // Старт безопасный
+                // Простая генерация, чтобы не было непроходимых рек
+                // Нельзя делать больше 3 рек подряд
+                const prev1 = lanes[index - 1]?.type;
+                const prev2 = lanes[index - 2]?.type;
+                const prev3 = lanes[index - 3]?.type;
 
-                switch (e.key) {
-                    case 'ArrowUp': movePlayer(0, 1); break;
-                    case 'ArrowDown': movePlayer(0, -1); break;
-                    case 'ArrowLeft': movePlayer(-1, 0); break;
-                    case 'ArrowRight': movePlayer(1, 0); break;
-                }
-            });
+                if (prev1 === 'river' && prev2 === 'river' && prev3 === 'river') return 'grass';
 
-            // On-screen buttons
-            document.querySelectorAll('.d-btn').forEach(btn => {
-                btn.addEventListener('touchstart', (e) => {
-                    e.preventDefault(); // Prevent double firing or scroll
-                    if (!state.isPlaying && !state.isGameOver) startGame();
-                    else handleInput(btn.dataset.dir);
-                });
-                btn.addEventListener('mousedown', (e) => {
-                    e.preventDefault();
-                    if (!state.isPlaying && !state.isGameOver) startGame();
-                    else handleInput(btn.dataset.dir);
-                });
-            });
-
-            actionBtn.addEventListener('click', () => {
-                if (state.isGameOver) resetGame();
-                else startGame();
-            });
-        }
-
-        function handleInput(dir) {
-            if (state.isPaused || state.isGameOver) return;
-            switch (dir) {
-                case 'up': movePlayer(0, 1); break;
-                case 'down': movePlayer(0, -1); break;
-                case 'left': movePlayer(-1, 0); break;
-                case 'right': movePlayer(1, 0); break;
-            }
-        }
-
-        function movePlayer(dx, dy) {
-            if (state.player.isMoving) return; // Basic turn-based feel, wait for hop to finish? 
-            // Actually fast hopping is allowed in Crossy Road. 
-            // We'll update target immediately.
-
-            const targetX = state.player.moveTargetX + dx;
-            const targetY = state.player.moveTargetY + dy;
-
-            // Boundaries
-            if (targetX < 0 || targetX >= VIEW_WIDTH) return;
-            if (targetY < state.score - 3) return; // Don't go too far back
-
-            // Check Tree collisions (static)
-            const targetLane = state.lanes[targetY];
-            if (targetLane) {
-                const blocked = targetLane.objects.some(obj =>
-                    obj.type === 'tree' && Math.round(obj.x) === targetX
-                );
-                if (blocked) return;
+                const rand = Math.random();
+                if (rand < 0.4) return 'grass';
+                if (rand < 0.7) return 'road';
+                return 'river';
             }
 
-            state.player.moveTargetX = targetX;
-            state.player.moveTargetY = targetY;
+            initCars() {
+                // Генерируем 1-3 машины
+                const count = Math.floor(Math.random() * 2) + 1;
+                const spacing = (COLS * GRID_SIZE) / count;
 
-            // Logic to update score
-            if (targetY > state.score) {
-                state.score = targetY;
-                // Generate more world if needed
-                if (state.lanes.length <= state.score + 20) {
-                    for (let i = 0; i < 10; i++) {
-                        generateLane(state.lanes.length);
-                    }
-                }
-            }
-            updateUI();
-        }
-
-        // Logic Loop
-        function loop(timestamp) {
-            const dt = (timestamp - state.lastTime) / 1000;
-            state.lastTime = timestamp;
-
-            if (state.isPlaying && !state.isPaused) {
-                update(dt);
-            }
-
-            draw();
-            requestAnimationFrame(loop);
-        }
-
-        function update(dt) {
-            // Update Player Position (Lerp)
-            const speed = 15 * dt; // Hop speed
-            const px = state.player.x;
-            const py = state.player.y;
-            const tx = state.player.moveTargetX;
-            const ty = state.player.moveTargetY;
-
-            if (Math.abs(tx - px) > 0.05) state.player.x += (tx - px) * speed;
-            else state.player.x = tx;
-
-            if (Math.abs(ty - py) > 0.05) state.player.y += (ty - py) * speed;
-            else state.player.y = ty;
-
-            // Snap when super close
-            if (Math.abs(tx - state.player.x) < 0.01) state.player.x = tx;
-            if (Math.abs(ty - state.player.y) < 0.01) state.player.y = ty;
-
-            // Update Map Objects
-            // We only need to update lanes visible or near visible
-            const visibleStart = Math.max(0, Math.floor(state.camera.y) - 2);
-            const visibleEnd = visibleStart + VIEW_HEIGHT + 4;
-
-            // Player Logic regarding Lane movement (Logs)
-            const currentLane = state.lanes[Math.round(state.player.y)];
-            let onLog = false;
-            let logSpeed = 0;
-
-            for (let i = visibleStart; i < visibleEnd && i < state.lanes.length; i++) {
-                const lane = state.lanes[i];
-                if (!lane) continue;
-
-                if (lane.speed !== 0) {
-                    // Move objects
-                    lane.objects.forEach(obj => {
-                        obj.x += lane.speed * dt;
-
-                        // Wrap around logic for infinite flow
-                        if (lane.speed > 0 && obj.x > VIEW_WIDTH + 5) {
-                            obj.x -= (VIEW_WIDTH + 10);
-                        } else if (lane.speed < 0 && obj.x < -5) {
-                            obj.x += (VIEW_WIDTH + 10);
-                        }
+                for (let i = 0; i < count; i++) {
+                    this.obstacles.push({
+                        x: i * spacing + Math.random() * 50,
+                        y: 0, // Относительный Y внутри лейна не важен, рисуем по центру лейна
+                        width: GRID_SIZE * 1.2,
+                        height: GRID_SIZE * 0.8,
+                        color: ['#e74c3c', '#f1c40f', '#9b59b6', '#3498db'][Math.floor(Math.random() * 4)]
                     });
                 }
+            }
 
-                // Collision Detection
-                // Only check if player is in this lane (approx Y match)
-                if (Math.abs(state.player.y - lane.y) < 0.3) {
-                    // Check horizontal overlap
-                    if (lane.type === 'road') {
-                        // Check cars
-                        lane.objects.forEach(obj => {
-                            if (Math.abs(state.player.x - obj.x) < (state.player.width / 2 + obj.width / 2 - 0.2)) {
-                                gameOver();
-                            }
-                        });
-                    } else if (lane.type === 'water') {
-                        // Check logs
-                        lane.objects.forEach(obj => {
-                            // Check if player is ON the log
-                            //  console.log(state.player.x, obj.x, obj.width);
-                            if (state.player.x + 0.3 > obj.x - 0.2 &&
-                                state.player.x - 0.3 < obj.x + obj.width + 0.2) {
-                                onLog = true;
-                                logSpeed = lane.speed;
-                            }
-                        });
+            initLogs() {
+                // Генерируем бревна
+                const count = Math.floor(Math.random() * 2) + 2; // 2-3 бревна, чтобы можно было пройти
+                const spacing = (COLS * GRID_SIZE) / count;
+
+                for (let i = 0; i < count; i++) {
+                    this.obstacles.push({
+                        x: i * spacing + Math.random() * 50,
+                        width: GRID_SIZE * (Math.random() < 0.5 ? 2 : 3), // Длина 2 или 3 клетки
+                        height: GRID_SIZE * 0.8,
+                        color: '#8d6e63'
+                    });
+                }
+            }
+
+            update() {
+                if (this.type === 'grass') return;
+
+                this.obstacles.forEach(obs => {
+                    obs.x += this.speed * this.direction;
+
+                    // Зацикливание
+                    const totalWidth = COLS * GRID_SIZE;
+                    // Чуть шире экрана, чтобы плавно исчезали
+                    if (this.direction === 1 && obs.x > canvas.width + GRID_SIZE) {
+                        obs.x = -obs.width - Math.random() * 100;
+                    } else if (this.direction === -1 && obs.x < -obs.width - GRID_SIZE) {
+                        obs.x = canvas.width + Math.random() * 100;
+                    }
+                });
+            }
+
+            draw(ctx, offset) {
+                const yPos = canvas.height - ((this.index * GRID_SIZE) - offset) - GRID_SIZE; // Снизу вверх
+
+                // Фон полосы
+                if (this.type === 'grass') {
+                    ctx.fillStyle = (this.index % 2 === 0) ? '#a2d149' : '#aad751'; // Шахматка травы
+                    ctx.fillRect(0, yPos, canvas.width, GRID_SIZE);
+                    // Декор (деревья по краям для красоты - опционально, но усложняет чтение кода)
+                } else if (this.type === 'road') {
+                    ctx.fillStyle = '#555';
+                    ctx.fillRect(0, yPos, canvas.width, GRID_SIZE);
+                    // Разметка
+                    ctx.fillStyle = '#777';
+                    ctx.fillRect(0, yPos + GRID_SIZE - 2, canvas.width, 2);
+                } else if (this.type === 'river') {
+                    ctx.fillStyle = '#4fc3f7';
+                    ctx.fillRect(0, yPos, canvas.width, GRID_SIZE);
+                }
+
+                // Препятствия
+                this.obstacles.forEach(obs => {
+                    ctx.fillStyle = obs.color;
+
+                    // Тень для объема
+                    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+                    ctx.fillRect(obs.x + 4, yPos + (GRID_SIZE - obs.height) / 2 + 4, obs.width, obs.height);
+
+                    ctx.fillStyle = obs.color;
+                    ctx.fillRect(obs.x, yPos + (GRID_SIZE - obs.height) / 2, obs.width, obs.height);
+
+                    // Детали для машины
+                    if (this.type === 'road') {
+                        ctx.fillStyle = 'rgba(255,255,255,0.8)'; // Окна
+                        ctx.fillRect(obs.x + 5, yPos + 8, 10, obs.height - 16);
+                    }
+                });
+            }
+        }
+
+        // --- Логика Игры ---
+
+        function initGame() {
+            resize(); // Убедиться, что сетка правильная
+            score = 0;
+            maxDistance = 0;
+            lanes = [];
+            cameraY = 0;
+
+            // Игрок стартует в центре по X, в начале по Y
+            player.gridX = Math.floor(COLS / 2);
+            player.gridY = 0;
+            player.isDead = false;
+
+            // Сбрасываем визуальные координаты
+            updatePlayerVisuals(true); // true = мгновенно, без анимации
+
+            // Генерируем начальные лейны
+            for (let i = 0; i < ROWS + 5; i++) {
+                lanes.push(new Lane(i));
+            }
+
+            scoreEl.innerText = '0';
+        }
+
+        function updatePlayerVisuals(instant = false) {
+            // Вычисляем целевые координаты на экране
+            // X = индекс колонки * размер клетки + центровка, если экран шире сетки
+            const gridPixelWidth = COLS * GRID_SIZE;
+            const offsetX = (canvas.width - gridPixelWidth) / 2;
+
+            player.targetX = offsetX + player.gridX * GRID_SIZE + 5; // +5 padding
+
+            if (instant) {
+                player.x = player.targetX;
+            }
+        }
+
+        // --- Основной цикл ---
+
+        function update() {
+            if (!gameActive || player.isDead) return;
+
+            // 1. Обновляем лейны
+            lanes.forEach(lane => lane.update());
+
+            // 2. Анимация игрока (Lerp)
+            player.x += (player.targetX - player.x) * 0.3;
+
+            // 3. Камера
+            // Камера стремится держать игрока на определенной высоте экрана
+            // Игровая координата Y=0 это низ экрана. Y увеличивается вверх.
+            // Мы хотим, чтобы игрок был на уровне 1/4 снизу (или 3/4 сверху Canvas Y)
+            const idealCameraY = (player.gridY * GRID_SIZE) - (GRID_SIZE * 3);
+            if (idealCameraY > cameraY) {
+                cameraY += (idealCameraY - cameraY) * 0.1; // Плавное слежение
+            }
+
+            // 4. Коллизии
+            checkCollisions();
+        }
+
+        function checkCollisions() {
+            // Находим лейн, на котором стоит игрок
+            const currentLane = lanes[player.gridY];
+
+            if (!currentLane) return; // Странная ошибка
+
+            // Хитбокс игрока (чуть меньше клетки)
+            const pBox = {
+                x: player.x + 5,
+                width: player.width - 10,
+                y: 0 // Y проверяем логически по ID лейна
+            };
+
+            player.onLog = false;
+
+            if (currentLane.type === 'road') {
+                // Проверка машин
+                for (let obs of currentLane.obstacles) {
+                    if (rectIntersect(pBox.x, 0, pBox.width, 1, obs.x, 0, obs.width, 1)) {
+                        die("Сбит машиной!");
+                        return;
+                    }
+                }
+            } else if (currentLane.type === 'river') {
+                // Проверка бревен
+                let onLog = false;
+                for (let obs of currentLane.obstacles) {
+                    // Здесь чуть сложнее: если мы пересекаемся с бревном, мы "на нем"
+                    if (rectIntersect(pBox.x, 0, pBox.width, 1, obs.x, 0, obs.width, 1)) {
+                        onLog = true;
+                        // Двигаем игрока вместе с бревном
+                        player.x += currentLane.speed * currentLane.direction;
+                        player.targetX = player.x; // Сбрасываем таргет, чтобы не дергало обратно
+
+                        // Обновляем логический gridX, чтобы при сходе с бревна встать ровно
+                        // Это упрощение: gridX обновляется только при шаге, но визуально мы едем
+                        break;
+                    }
+                }
+
+                if (!onLog) {
+                    die("Утонул!");
+                } else {
+                    // Если уплыл за экран на бревне - тоже смерть
+                    if (player.x < -GRID_SIZE || player.x > canvas.width + GRID_SIZE) {
+                        die("Уплыл далеко!");
                     }
                 }
             }
+        }
 
-            // Water Death Logic
-            if (currentLane && currentLane.type === 'water') {
-                // If we are settled on a water lane (not mid-hop)
-                if (Math.abs(state.player.y - state.player.moveTargetY) < 0.1 && !onLog) {
-                    // Player is in water without log
-                    gameOver();
-                } else if (onLog) {
-                    // Move player with log
-                    state.player.x += logSpeed * dt;
-                    state.player.moveTargetX += logSpeed * dt;
-                }
-            }
+        function rectIntersect(x1, y1, w1, h1, x2, y2, w2, h2) {
+            return x2 < x1 + w1 && x2 + w2 > x1 && y2 < y1 + h1 && y2 + h2 > y1;
+        }
 
-            // Boundary Check (Off screen side)
-            if (state.player.x < -1 || state.player.x > VIEW_WIDTH) {
-                gameOver();
-            }
-
-            // Update Camera
-            // Camera chases player but doesn't go down
-            const targetCamY = state.player.y - 4; // Keep player near bottom quarter
-            if (targetCamY > state.camera.y) {
-                state.camera.y += (targetCamY - state.camera.y) * 2 * dt;
-            }
+        function die(reason) {
+            player.isDead = true;
+            gameActive = false;
+            gameOverTitle.innerText = reason === "Утонул!" ? "БУЛЬ-БУЛЬ!" : "БАБАХ!";
+            finalScoreEl.innerText = score;
+            gameOverScreen.classList.add('active');
         }
 
         function draw() {
-            // Clear
-            ctx.fillStyle = COLORS.GRASS_LIGHT; // Base background
+            // Очистка
+            ctx.fillStyle = '#87CEEB';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            const camY = state.camera.y;
+            // Рисуем видимые лейны
+            // Оптимизация: рисуем только те, что попадают в экран + буфер
+            const startLaneIndex = Math.floor(cameraY / GRID_SIZE) - 2;
+            const endLaneIndex = startLaneIndex + Math.ceil(canvas.height / GRID_SIZE) + 4;
 
-            // Set scale and transform
-            ctx.save();
-            const pxScale = canvas.width / VIEW_WIDTH;
-            ctx.scale(pxScale, pxScale);
-            // Invert Y axis for drawing? No, standard canvas is Y down. 
-            // Our logic is Y up (0 is bottom). So we translate.
-            // Screen Bottom = Canvas Height in logic units = VIEW_HEIGHT
-            // We want Logic Y=0 to be at Screen Bottom.
-            // And minus Camera Y.
-
-            // Transform:
-            // 1. Flip Y? Easier to specific drawing coords:
-            // ScreenY = (VIEW_HEIGHT - (LogicY - CamY)) * TileSize?
-            // Actually simpler to just translate context.
-
-            // Let's use standard coords: x corresponds to x.
-            // y corresponds to BOTTOM UP. 
-            // ctx.translate(0, VIEW_HEIGHT); ctx.scale(1, -1); could work but text rendering gets flipped.
-
-            // Manual coordinate mapping:
-            // drawX = logicX
-            // drawY = VIEW_HEIGHT - (logicY - camY) - 1 (since 0 is bottom tile)
-
-            const getDrawY = (logicY) => VIEW_HEIGHT - (logicY - camY) - 1.5;
-
-            // Draw Lanes
-            const visibleStart = Math.floor(camY) - 1;
-            const visibleEnd = visibleStart + VIEW_HEIGHT + 2;
-
-            for (let i = visibleStart; i < visibleEnd; i++) {
-                const lane = state.lanes[i];
-                if (!lane) continue;
-
-                const dy = getDrawY(lane.y);
-
-                // Draw Lane Background
-                if (lane.type === 'grass') ctx.fillStyle = ((i % 2) === 0) ? COLORS.GRASS_LIGHT : COLORS.GRASS_DARK;
-                else if (lane.type === 'road') ctx.fillStyle = COLORS.ROAD;
-                else if (lane.type === 'water') ctx.fillStyle = COLORS.WATER;
-
-                // Fill full width
-                ctx.fillRect(0, dy, VIEW_WIDTH, 1.05); // +0.05 to fix subpixel gaps
-
-                // Draw Lane Markings
-                if (lane.type === 'road') {
-                    ctx.fillStyle = '#ffffff';
-                    ctx.globalAlpha = 0.5;
-                    ctx.fillRect(0, dy + 0.9, VIEW_WIDTH, 0.05); // bottom line
-                    ctx.globalAlpha = 1;
+            for (let i = startLaneIndex; i < endLaneIndex; i++) {
+                if (i >= 0 && lanes[i]) {
+                    lanes[i].draw(ctx, cameraY);
                 }
             }
 
-            // Draw Objects (Order matters for Z-index, somewhat)
-            for (let i = visibleEnd; i >= visibleStart; i--) { // Draw from top to bottom (far to near)
-                const lane = state.lanes[i];
-                if (!lane) continue;
-                const dy = getDrawY(lane.y);
+            // Рисуем игрока
+            if (!player.isDead || Math.floor(Date.now() / 200) % 2 === 0) { // Мигание если умер
+                const playerScreenY = canvas.height - ((player.gridY * GRID_SIZE) - cameraY) - GRID_SIZE;
 
-                // Draw Objects
-                lane.objects.forEach(obj => {
-                    const dx = obj.x;
-                    if (obj.type === 'tree') drawBlock(dx, dy, obj.width, 1.2, obj.color, 0.4); // Trees are tall
-                    else if (obj.type === 'car') drawBlock(dx, dy, obj.width, 0.9, obj.color, 0.5);
-                    else if (obj.type === 'log') drawBlock(dx, dy, obj.width, 0.8, obj.color, 0);
-                });
+                ctx.fillStyle = player.color;
+                // Тень
+                ctx.fillRect(player.x, playerScreenY + 10, player.width, player.height); // Тень падает вниз
 
-                // Draw Player if on this lane (approx)
-                if (Math.round(state.player.y) === i) {
-                    drawBlock(state.player.x, getDrawY(state.player.y), 0.6, 0.6, COLORS.PLAYER, 0.6, true);
-                }
-            }
+                // Тело (белый куб)
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(player.x, playerScreenY + 5, player.width, player.height); // Подпрыгнул визуально
 
-            ctx.restore();
-        }
+                // Гребень
+                ctx.fillStyle = '#e74c3c';
+                ctx.fillRect(player.x + 10, playerScreenY + 5, 10, 5);
 
-        function drawBlock(x, y, w, h, color, height3d, isPlayer = false) {
-            // Simple pseudo-3D block drawing
-            // x, y is bottom-left corner in logic space? 
-            // Our getDrawY gives top-left of the tile? No, let's clarify.
-            // getDrawY returns canvas Y coord for the tile start.
+                // Глаз
+                ctx.fillStyle = '#000';
+                ctx.fillRect(player.x + 20, playerScreenY + 10, 4, 4);
 
-            // Adjust to center objects in tile
-            const cx = x + (1 - w) / 2;
-            const cy = y + (1 - h) / 2;
-
-            // Main Face
-            ctx.fillStyle = color;
-            ctx.fillRect(cx, cy, w, h);
-
-            // Side Face (Right)
-            ctx.fillStyle = shadeColor(color, -20);
-            ctx.fillRect(cx + w, cy, height3d * 0.2, h); // thin side
-
-            // Top/Bottom Face (Top if we look down? Actually usually we see Front and Top or Front and Side)
-            // Let's do Front + Side + Top to look 3D.
-            // But this is top-downish.
-            // Let's just do a simple shadow
-            ctx.fillStyle = 'rgba(0,0,0,0.2)';
-            ctx.fillRect(cx + 0.1, cy + h - 0.1, w, 0.1);
-
-            if (isPlayer) {
-                // Eyes
-                ctx.fillStyle = 'white';
-                ctx.fillRect(cx + w - 0.2, cy + 0.1, 0.15, 0.15);
-                ctx.fillStyle = 'black';
-                ctx.fillRect(cx + w - 0.15, cy + 0.15, 0.05, 0.05);
+                // Клюв
+                ctx.fillStyle = '#f1c40f';
+                ctx.fillRect(player.x + 24, playerScreenY + 15, 6, 6);
             }
         }
 
-        function shadeColor(color, percent) {
-            // Helper to darken hex
-            // Simple version or just usage
-            return color; // Placeholder, real implementation is complex without library
+        function gameLoop() {
+            update();
+            draw();
+            animationId = requestAnimationFrame(gameLoop);
         }
 
-        // Game State Management
         function startGame() {
-            if (state.isPlaying) return;
-            resetGame();
-            state.isPlaying = true;
-            state.isPaused = false;
-            state.isGameOver = false;
-
-            overlay.classList.add('hidden');
-        }
-
-        function gameOver() {
-            if (state.isGameOver) return;
-            state.isGameOver = true;
-            state.isPlaying = false;
-
-            if (state.score > state.bestScore) {
-                state.bestScore = state.score;
-                localStorage.setItem('crossy_best', state.bestScore);
+            // ИСПРАВЛЕНИЕ: Отменяем предыдущий цикл анимации перед запуском нового,
+            // чтобы игра не ускорялась (не работала в 2-3 потока) после перезапуска.
+            if (animationId) {
+                cancelAnimationFrame(animationId);
             }
 
-            updateUI();
-
-            screenTitle.innerHTML = "GAME<br>OVER";
-            finalScoreDisplay.innerText = "Score: " + state.score;
-            finalScoreDisplay.style.display = 'block';
-            actionBtn.innerText = "RETRY";
-            overlay.classList.remove('hidden');
+            startScreen.classList.remove('active');
+            gameOverScreen.classList.remove('active');
+            gameActive = true;
+            initGame();
+            gameLoop();
         }
 
-        function resetGame() {
-            state.score = 0;
-            state.player.x = Math.floor(VIEW_WIDTH / 2);
-            state.player.y = 0;
-            state.player.moveTargetX = state.player.x;
-            state.player.moveTargetY = 0;
-            state.camera.y = 0;
-            state.lanes = [];
-
-            // Regenerate start
-            for (let i = 0; i < 10; i++) addLane(i, 'grass');
-            for (let i = 10; i < 30; i++) generateLane(i);
-
-            updateUI();
-        }
-
-        function updateUI() {
-            uiScore.innerText = state.score;
-            uiBest.innerText = "BEST: " + state.bestScore;
-        }
-
-        // Global Hooks
-        window.game = {
-            pause: () => { state.isPaused = true; },
-            resume: () => { state.isPaused = false; },
-            reset: () => { resetGame(); if (state.isPlaying) startGame(); }, // Reset loops if playing
-            getState: () => ({
-                score: state.score,
-                bestScore: state.bestScore,
-                isPlaying: state.isPlaying,
-                isGameOver: state.isGameOver
-            })
-        };
-
-        // Start
-        init();
+        // Запуск цикла для отрисовки меню на старте
+        // Чтобы была картинка на фоне, запускаем один раз draw, но не loop
+        draw();
+        // Примечание: старый вызов draw() в конце скрипта был корректен для старта, 
+        // но теперь startGame контролирует всё.
 
     </script>
 </body>

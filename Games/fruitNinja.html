@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Fruit Slicer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #222;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none;
+            /* Отключаем зум и скролл на мобильных */
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* UI Слой поверх канваса */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            /* Клики проходят сквозь слой к канвасу */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .screen {
+            background: rgba(0, 0, 0, 0.85);
+            padding: 25px 40px;
+            border-radius: 20px;
+            text-align: center;
+            color: white;
+            pointer-events: auto;
+            /* Кнопки должны быть кликабельны */
+            border: 3px solid #e91e63;
+            display: none;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .screen.active {
+            display: block;
+            animation: popIn 0.3s ease-out;
+        }
+
+        @keyframes popIn {
+            from {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        h1 {
+            margin: 0 0 15px;
+            font-size: 36px;
+            color: #ffeb3b;
+            text-shadow: 3px 3px #e91e63;
+            letter-spacing: 2px;
+        }
+
+        p {
+            font-size: 18px;
+            margin-bottom: 25px;
+            color: #eee;
+        }
+
+        button {
+            background: linear-gradient(45deg, #e91e63, #ff4081);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 22px;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 5px 20px rgba(233, 30, 99, 0.5);
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+        button:active {
+            transform: scale(0.95);
+            box-shadow: 0 2px 10px rgba(233, 30, 99, 0.5);
+        }
+
+        #hud {
+            position: absolute;
+            top: 15px;
+            left: 20px;
+            color: white;
+            font-size: 28px;
+            font-weight: 900;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            pointer-events: none;
+            display: flex;
+            gap: 25px;
+            z-index: 5;
+        }
+
+        .miss-marker {
+            color: #ff5252;
+            text-shadow: 0 0 10px rgba(255, 82, 82, 0.8);
+        }
+
+        .score-label {
+            color: #ffeb3b;
+        }
+    </style>
+</head>
+
+<body>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="hud">
+        <div class="score-label"><span id="score">0</span></div>
+        <div id="lives">XXX</div>
+    </div>
+
+    <div id="ui-layer">
+        <div id="start-screen" class="screen active">
+            <h1>FRUIT SLICER</h1>
+            <p>Свайпай, чтобы резать!</p>
+            <p><small>Не трогай бомбы 💣</small></p>
+            <button onclick="startGame()">ИГРАТЬ</button>
+        </div>
+
+        <div id="game-over-screen" class="screen">
+            <h1 style="color: #ff5252">GAME OVER</h1>
+            <p>Твой счёт: <span id="final-score" style="color: #ffeb3b; font-weight: bold; font-size: 24px;">0</span>
+            </p>
+            <button onclick="startGame()">ЗАНОВО</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Элементы UI
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const scoreEl = document.getElementById('score');
+        const livesEl = document.getElementById('lives');
+        const finalScoreEl = document.getElementById('final-score');
+
+        // Настройки экрана
+        let width, height;
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- Игровое состояние ---
+        let gameState = 'start'; // start, playing, gameover
+        let score = 0;
+        let misses = 0;
+        let spawnTimer = 0;
+        let difficulty = 1;
+        let animationId = null;
+
+        // --- Сущности ---
+        let fruits = [];
+        let particles = [];
+        let blade = []; // След от пальца
+
+        // Цвета фруктов
+        const FRUIT_TYPES = [
+            { color: '#FF5252', radius: 30, name: 'Apple' },   // Красный
+            { color: '#FFEB3B', radius: 35, name: 'Lemon' },   // Желтый
+            { color: '#66BB6A', radius: 32, name: 'Lime' },    // Зеленый
+            { color: '#FFA726', radius: 38, name: 'Orange' },  // Оранжевый
+            { color: '#AB47BC', radius: 28, name: 'Plum' }     // Фиолетовый
+        ];
+
+        // --- Классы ---
+
+        class Fruit {
+            constructor() {
+                this.isBomb = Math.random() < 0.15; // 15% шанс бомбы
+
+                // --- АДАПТИВНЫЙ СПАВН (ИСПРАВЛЕНИЕ) ---
+
+                // Радиус немного зависит от размера экрана, чтобы на маленьких экранах фрукты не были гигантскими
+                const scaleFactor = Math.min(width, height) / 800;
+                const baseRadius = this.isBomb ? 40 : 32;
+                this.radius = baseRadius * (0.8 + scaleFactor * 0.4);
+
+                if (!this.isBomb) {
+                    const type = FRUIT_TYPES[Math.floor(Math.random() * FRUIT_TYPES.length)];
+                    this.color = type.color;
+                } else {
+                    this.color = '#222';
+                }
+
+                // Позиция X: Гарантированно внутри экрана с отступом 10%
+                // Это решает проблему появления с краю
+                const safeMargin = width * 0.1;
+                const safeWidth = width * 0.8;
+                this.x = safeMargin + Math.random() * safeWidth;
+
+                // Позиция Y: Прямо под экраном
+                this.y = height + this.radius + 10;
+
+                // Физика броска (АДАПТИВНАЯ)
+
+                // 1. Горизонтальная скорость (vx)
+                // Чем ближе к краю, тем сильнее кидаем к центру. 
+                // Скорость зависит от ширины экрана.
+                const centerX = width / 2;
+                const distFromCenterNormalized = (this.x - centerX) / (width / 2); // -1 (слева) до 1 (справа)
+                const horizontalSpeedFactor = width / 180; // На широком экране летит быстрее вбок
+                this.vx = -distFromCenterNormalized * (Math.random() * horizontalSpeedFactor * 0.5 + horizontalSpeedFactor * 0.5);
+
+                // 2. Вертикальная скорость (vy) - ГЛАВНОЕ ИСПРАВЛЕНИЕ
+                // Мы рассчитываем скорость так, чтобы фрукт долетел до определенной высоты экрана
+                // Цель: пик полета между 20% (высоко) и 50% (середина) высоты экрана от ВЕРХА.
+                this.gravity = height * 0.0006; // Гравитация тоже зависит от высоты экрана для естественности
+                if (this.gravity < 0.3) this.gravity = 0.3; // Минимум
+
+                const targetTopY = height * (0.2 + Math.random() * 0.35); // Случайная высота пика
+                const jumpHeight = this.y - targetTopY; // Дистанция полета вверх
+
+                // Формула: v = sqrt(2 * g * h)
+                // Добавляем множитель сложности, чтобы со временем летали чуть быстрее
+                const speedMultiplier = 1 + (difficulty * 0.02);
+                this.vy = -Math.sqrt(2 * this.gravity * jumpHeight) * speedMultiplier;
+
+                this.rotation = 0;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.15;
+
+                this.active = true;
+                this.sliced = false;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += this.gravity;
+                this.rotation += this.rotationSpeed;
+
+                // Проверка на падение (промах)
+                if (this.active && this.y > height + this.radius + 50) { // +50 запас
+                    this.active = false;
+                    if (!this.isBomb && !this.sliced) {
+                        addMiss();
+                    }
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+
+                if (this.isBomb) {
+                    // Бомба
+                    ctx.fillStyle = '#222';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Пульсирующий центр
+                    const pulse = Math.abs(Math.sin(Date.now() / 150)) * 8;
+                    ctx.fillStyle = '#F44336';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, (this.radius * 0.3) + pulse / 3, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Фитиль
+                    ctx.strokeStyle = '#795548';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(0, -this.radius);
+                    ctx.quadraticCurveTo(this.radius * 0.3, -this.radius * 1.4, this.radius * 0.6, -this.radius * 1.2);
+                    ctx.stroke();
+
+                    // Искра
+                    if (Math.random() > 0.5) {
+                        ctx.fillStyle = '#FFC107';
+                        ctx.beginPath();
+                        ctx.arc(this.radius * 0.6, -this.radius * 1.2, 3, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+
+                } else {
+                    // Фрукт
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Внутренний блик
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+                    ctx.beginPath();
+                    ctx.ellipse(0, -this.radius * 0.2, this.radius * 0.8, this.radius * 0.6, 0, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Контур
+                    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color, type = 'splat') {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.type = type;
+                this.life = 1.0;
+                this.decay = Math.random() * 0.02 + 0.015;
+
+                const speed = Math.random() * 6 + 2;
+                const angle = Math.random() * Math.PI * 2;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.gravity = 0.15;
+
+                if (type === 'slice_part') {
+                    this.radius = Math.random() * 12 + 6;
+                    this.vy = Math.random() * -6 - 2; // Осколки летят вверх
+                    this.gravity = 0.25;
+                } else {
+                    this.radius = Math.random() * 4 + 2; // Брызги
+                }
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += this.gravity;
+                this.life -= this.decay;
+            }
+
+            draw() {
+                if (this.life <= 0) return;
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+
+                if (this.type === 'slice_part') {
+                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI, false);
+                } else {
+                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                }
+
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        // --- Логика Игры ---
+
+        function startGame() {
+            if (animationId) cancelAnimationFrame(animationId);
+
+            startScreen.classList.remove('active');
+            gameOverScreen.classList.remove('active');
+            gameState = 'playing';
+
+            score = 0;
+            misses = 0;
+            difficulty = 1;
+            fruits = [];
+            particles = [];
+            blade = [];
+            spawnTimer = 0;
+
+            updateUI();
+            gameLoop();
+        }
+
+        function addScore() {
+            score++;
+            if (score % 5 === 0) difficulty += 0.5; // Чуть быстрее растет сложность
+            updateUI();
+        }
+
+        function addMiss() {
+            misses++;
+            updateUI();
+
+            // Красная вспышка экрана при промахе
+            canvas.style.backgroundColor = '#422';
+            setTimeout(() => canvas.style.backgroundColor = '#222', 150);
+
+            if (misses >= 3) {
+                triggerGameOver();
+            }
+        }
+
+        function updateUI() {
+            scoreEl.innerText = score;
+            let livesStr = '';
+            for (let i = 0; i < 3; i++) {
+                if (i < misses) livesStr += '<span class="miss-marker">✖</span> ';
+                else livesStr += '❤ '; // Сердечки вместо X для красоты
+            }
+            livesEl.innerHTML = livesStr;
+        }
+
+        function triggerGameOver() {
+            gameState = 'gameover';
+            finalScoreEl.innerText = score;
+            gameOverScreen.classList.add('active');
+        }
+
+        function spawnLogic() {
+            if (gameState !== 'playing') return;
+
+            spawnTimer--;
+            if (spawnTimer <= 0) {
+                fruits.push(new Fruit());
+
+                // Шанс двойного спавна
+                if (Math.random() < 0.2 + (difficulty * 0.03)) {
+                    setTimeout(() => { if (gameState === 'playing') fruits.push(new Fruit()); }, 150);
+                }
+
+                // Интервал спавна
+                const minInterval = 25;
+                const maxInterval = Math.max(30, 70 - difficulty * 4);
+                spawnTimer = minInterval + Math.random() * (maxInterval - minInterval);
+            }
+        }
+
+        // Проверка пересечения
+        function checkSlice(p1, p2) {
+            if (fruits.length === 0) return;
+
+            fruits.forEach(fruit => {
+                if (!fruit.active || fruit.sliced) return;
+
+                // Упрощенная проверка дистанции до отрезка
+                const dist = pointToLineDistance(fruit.x, fruit.y, p1.x, p1.y, p2.x, p2.y);
+
+                if (dist < fruit.radius) {
+                    if (fruit.isBomb) {
+                        createExplosion(fruit.x, fruit.y);
+                        triggerGameOver();
+                    } else {
+                        sliceFruit(fruit);
+                    }
+                }
+            });
+        }
+
+        function sliceFruit(fruit) {
+            fruit.sliced = true;
+            fruit.active = false;
+            addScore();
+
+            // Частицы
+            const particleCount = 10 + Math.random() * 10;
+            for (let i = 0; i < particleCount; i++) {
+                particles.push(new Particle(fruit.x, fruit.y, fruit.color, 'splash'));
+            }
+            particles.push(new Particle(fruit.x, fruit.y, fruit.color, 'slice_part'));
+            particles.push(new Particle(fruit.x, fruit.y, fruit.color, 'slice_part'));
+        }
+
+        function createExplosion(x, y) {
+            for (let i = 0; i < 40; i++) {
+                particles.push(new Particle(x, y, '#FFF', 'splash'));
+                particles.push(new Particle(x, y, '#F44336', 'splash'));
+            }
+            // Тряска
+            canvas.style.transform = `translate(${Math.random() * 10 - 5}px, ${Math.random() * 10 - 5}px)`;
+            setTimeout(() => canvas.style.transform = 'none', 200);
+        }
+
+        function pointToLineDistance(x, y, x1, y1, x2, y2) {
+            const A = x - x1;
+            const B = y - y1;
+            const C = x2 - x1;
+            const D = y2 - y1;
+
+            const dot = A * C + B * D;
+            const len_sq = C * C + D * D;
+            let param = -1;
+            if (len_sq !== 0) param = dot / len_sq;
+
+            let xx, yy;
+            if (param < 0) { xx = x1; yy = y1; }
+            else if (param > 1) { xx = x2; yy = y2; }
+            else { xx = x1 + param * C; yy = y1 + param * D; }
+
+            const dx = x - xx;
+            const dy = y - yy;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        // --- Input Handling ---
+
+        function addBladePoint(x, y) {
+            blade.push({ x, y, life: 9 });
+            if (blade.length > 1) {
+                const p1 = blade[blade.length - 2];
+                const p2 = blade[blade.length - 1];
+                checkSlice(p1, p2);
+            }
+        }
+
+        // Touch & Mouse (Combined Logic)
+        const handleMove = (x, y) => {
+            if (gameState === 'playing') addBladePoint(x, y);
+        };
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (gameState === 'playing') canvas.isDragging = true;
+            handleMove(e.clientX, e.clientY);
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (canvas.isDragging) handleMove(e.clientX, e.clientY);
+        });
+        window.addEventListener('mouseup', () => { canvas.isDragging = false; blade = []; });
+
+        canvas.addEventListener('touchstart', (e) => {
+            if (gameState === 'playing') {
+                e.preventDefault();
+                handleMove(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (gameState === 'playing') {
+                e.preventDefault();
+                handleMove(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            blade = [];
+        });
+
+        // --- Loop ---
+
+        function gameLoop() {
+            if (gameState !== 'playing') {
+                if (gameState === 'gameover') {
+                    ctx.fillStyle = 'rgba(34, 34, 34, 0.3)';
+                    ctx.fillRect(0, 0, width, height);
+                    particles.forEach(p => { p.update(); p.draw(); });
+                    animationId = requestAnimationFrame(gameLoop);
+                }
+                return;
+            }
+
+            ctx.fillStyle = '#222';
+            ctx.fillRect(0, 0, width, height);
+
+            spawnLogic();
+
+            // Update Fruits
+            for (let i = fruits.length - 1; i >= 0; i--) {
+                let f = fruits[i];
+                f.update();
+                f.draw();
+                if (!f.active) fruits.splice(i, 1);
+            }
+
+            // Update Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.update();
+                p.draw();
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            // Draw Blade
+            if (blade.length > 1) {
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                for (let i = 0; i < blade.length - 1; i++) {
+                    const p1 = blade[i];
+                    const p2 = blade[i + 1];
+                    ctx.lineWidth = Math.min(12, p1.life * 1.5);
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${p1.life / 9})`;
+                    // Эффект свечения
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = 'white';
+
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.stroke();
+
+                    ctx.shadowBlur = 0;
+                    p1.life -= 1.2;
+                }
+                blade = blade.filter(p => p.life > 0);
+            }
+
+            animationId = requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+
+</html>
