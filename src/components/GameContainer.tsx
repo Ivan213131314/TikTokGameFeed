@@ -58,7 +58,7 @@ export const GameContainer: React.FC<GameContainerProps> = ({ game, isActive, on
         <View style={styles.container} {...panResponder.panHandlers}>
             {isActive ? (
                 <WebView
-                    source={game.html_content ? { html: game.html_content } : { uri: game.uri }}
+                    source={game.url ? { uri: game.url } : game.html_content ? { html: game.html_content } : { uri: game.uri }}
                     style={styles.webview}
                     scrollEnabled={false}
                     originWhitelist={['*']}

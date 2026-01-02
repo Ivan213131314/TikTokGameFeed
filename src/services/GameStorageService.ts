@@ -71,6 +71,7 @@ export const GameStorageService = {
             id: game.id,
             name: game.title,
             html_content: game.html_content,
+            url: game.url,
             dateAdded: new Date(game.created_at).getTime(),
             user_id: game.user_id,
         }));
@@ -99,6 +100,7 @@ export const GameStorageService = {
             id: game.id,
             name: game.title,
             html_content: game.html_content,
+            url: game.url,
             dateAdded: new Date(game.created_at).getTime(),
             user_id: game.user_id,
             icon_asset_key: game.icon_asset_key // Ensure this is mapped if present
@@ -148,6 +150,37 @@ export const GameStorageService = {
             id: data.id,
             name: data.title,
             html_content: data.html_content,
+            url: data.url,
+            dateAdded: new Date(data.created_at).getTime(),
+            user_id: data.user_id,
+        };
+    },
+
+    async addExternalGame(name: string, url: string): Promise<GameModel> {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("User not authenticated");
+
+        const { data, error } = await supabase
+            .from('games')
+            .insert({
+                user_id: user.id,
+                title: name,
+                url: url,
+                description: 'Added as external link',
+            })
+            .select()
+            .single();
+
+        if (error) {
+            console.error("Error adding external game:", error);
+            throw error;
+        }
+
+        return {
+            id: data.id,
+            name: data.title,
+            html_content: data.html_content,
+            url: data.url,
             dateAdded: new Date(data.created_at).getTime(),
             user_id: data.user_id,
         };

@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, TouchableOpacity, FlatList, SafeAreaView, RefreshControl, Alert, Modal, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, FlatList, SafeAreaView, RefreshControl, Alert, Modal, ScrollView, TextInput } from 'react-native';
 import { Image } from 'expo-image';
 import * as DocumentPicker from 'expo-document-picker';
 import { Colors } from '../../src/constants/Colors';
@@ -45,6 +45,12 @@ export default function ProfileScreen() {
     const [followingListVisible, setFollowingListVisible] = useState(false);
     const [followingList, setFollowingList] = useState<import('../../src/types/SocialModels').ProfileModel[]>([]);
     const [loadingFollowing, setLoadingFollowing] = useState(false);
+
+    // Add Game Flow
+    const [addGameModeVisible, setAddGameModeVisible] = useState(false);
+    const [urlInputVisible, setUrlInputVisible] = useState(false);
+    const [gameName, setGameName] = useState('');
+    const [gameUrl, setGameUrl] = useState('');
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -93,7 +99,12 @@ export default function ProfileScreen() {
         setRefreshing(false);
     }, []);
 
-    const uploadGame = async () => {
+    const handleAddPress = () => {
+        setAddGameModeVisible(true);
+    };
+
+    const uploadGameFile = async () => {
+        setAddGameModeVisible(false);
         try {
             const result = await DocumentPicker.getDocumentAsync({
                 type: 'text/html',
@@ -109,6 +120,24 @@ export default function ProfileScreen() {
             }
         } catch (err) {
             console.error("Error picking file:", err);
+        }
+    };
+
+    const handleAddExternalGame = async () => {
+        if (!gameName || !gameUrl) {
+            Alert.alert("Error", "Please fill name and URL");
+            return;
+        }
+
+        try {
+            await GameStorageService.addExternalGame(gameName, gameUrl);
+            setUrlInputVisible(false);
+            setGameName('');
+            setGameUrl('');
+            await loadGames(true);
+        } catch (err) {
+            console.error("Error adding external game:", err);
+            Alert.alert("Error", "Failed to add game");
         }
     };
 
@@ -220,6 +249,17 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
                 <Text style={styles.username}>@{session.user.email?.split('@')[0]}</Text>
 
+                <View style={styles.headerButtons}>
+                    <TouchableOpacity style={styles.addGameBtn} onPress={handleAddPress}>
+                        <Ionicons name="add" size={20} color="white" />
+                        <Text style={styles.addGameText}>Add Game</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.signOutBtnHeader} onPress={() => supabase.auth.signOut()}>
+                        <Text style={styles.signOutText}>Sign Out</Text>
+                    </TouchableOpacity>
+                </View>
+
                 <View style={styles.statsContainer}>
                     <View style={styles.statItem}>
                         <Text style={styles.statNumber}>{games.length}</Text>
@@ -238,9 +278,6 @@ export default function ProfileScreen() {
                         <Text style={styles.statLabel}>Followers</Text>
                     </TouchableOpacity>
                 </View>
-                <TouchableOpacity style={styles.signOutBtn} onPress={() => supabase.auth.signOut()}>
-                    <Text style={styles.signOutText}>Sign Out</Text>
-                </TouchableOpacity>
             </View>
 
             <View style={styles.content}>
@@ -248,18 +285,15 @@ export default function ProfileScreen() {
                     <View style={styles.activeTabContainer}>
                         <Text style={styles.activeTabText}>My Games</Text>
                     </View>
-                    <TouchableOpacity style={styles.uploadBtnSmall} onPress={uploadGame}>
-                        <Ionicons name="add" size={24} color={Colors.background} />
-                    </TouchableOpacity>
                 </View>
 
                 {games.length === 0 ? (
                     <View style={styles.emptyState}>
                         <Ionicons name="game-controller-outline" size={60} color={Colors.textSecondary} />
                         <Text style={styles.emptyText}>No games uploaded yet</Text>
-                        <TouchableOpacity style={styles.uploadBtn} onPress={uploadGame}>
+                        <TouchableOpacity style={styles.uploadBtn} onPress={handleAddPress}>
                             <Ionicons name="add" size={24} color={Colors.text} />
-                            <Text style={styles.uploadBtnText}>Upload HTML5 Game</Text>
+                            <Text style={styles.uploadBtnText}>Add Game</Text>
                         </TouchableOpacity>
                     </View>
                 ) : (
@@ -388,6 +422,84 @@ export default function ProfileScreen() {
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Add Game Choice Modal */}
+            <Modal
+                visible={addGameModeVisible}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => setAddGameModeVisible(false)}
+            >
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setAddGameModeVisible(false)}
+                >
+                    <View style={styles.optionModalContent}>
+                        <Text style={styles.modalTitle}>Add New Game</Text>
+
+                        <TouchableOpacity style={styles.optionButton} onPress={uploadGameFile}>
+                            <Ionicons name="document-outline" size={24} color={Colors.text} />
+                            <Text style={styles.optionText}>Upload HTML File</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.optionButton} onPress={() => {
+                            setAddGameModeVisible(false);
+                            setUrlInputVisible(true);
+                        }}>
+                            <Ionicons name="link-outline" size={24} color={Colors.text} />
+                            <Text style={styles.optionText}>Add Game URL (GameSnacks)</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.cancelButton} onPress={() => setAddGameModeVisible(false)}>
+                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
+            {/* URL Input Modal */}
+            <Modal
+                visible={urlInputVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setUrlInputVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Add External Game</Text>
+                            <TouchableOpacity onPress={() => setUrlInputVisible(false)}>
+                                <Ionicons name="close" size={24} color={Colors.text} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={styles.inputLabel}>Game Name</Text>
+                        <TextInput
+                            style={styles.textInput}
+                            placeholder="e.g. Cube Tower"
+                            placeholderTextColor={Colors.textSecondary}
+                            value={gameName}
+                            onChangeText={setGameName}
+                        />
+
+                        <Text style={styles.inputLabel}>Game URL</Text>
+                        <TextInput
+                            style={styles.textInput}
+                            placeholder="https://gamesnacks.com/games/..."
+                            placeholderTextColor={Colors.textSecondary}
+                            value={gameUrl}
+                            onChangeText={setGameUrl}
+                            autoCapitalize="none"
+                            keyboardType="url"
+                        />
+
+                        <TouchableOpacity style={styles.submitBtn} onPress={handleAddExternalGame}>
+                            <Text style={styles.submitBtnText}>Add Game</Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
@@ -660,15 +772,17 @@ const styles = StyleSheet.create({
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.8)',
-        justifyContent: 'flex-end',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
     },
     modalContent: {
         backgroundColor: '#1E1E1E',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
+        borderRadius: 20,
         padding: 20,
+        width: '100%',
+        maxWidth: 400,
         maxHeight: '90%',
-        minHeight: '50%',
     },
     modalHeader: {
         flexDirection: 'row',
@@ -698,11 +812,36 @@ const styles = StyleSheet.create({
     },
     optionModalContent: {
         backgroundColor: '#1E1E1E',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
+        borderRadius: 20,
         padding: 20,
-        paddingBottom: 40,
         width: '100%',
+        maxWidth: 400,
+    },
+    headerButtons: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 15,
+    },
+    addGameBtn: {
+        flexDirection: 'row',
+        backgroundColor: Colors.tint,
+        paddingHorizontal: 20,
+        paddingVertical: 8,
+        borderRadius: 20,
+        alignItems: 'center',
+        marginRight: 10,
+    },
+    addGameText: {
+        color: 'white',
+        fontWeight: 'bold',
+        marginLeft: 5,
+    },
+    signOutBtnHeader: {
+        paddingHorizontal: 15,
+        paddingVertical: 8,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: Colors.textSecondary,
     },
     optionTitle: {
         color: Colors.textSecondary,
@@ -775,5 +914,30 @@ const styles = StyleSheet.create({
         color: Colors.text,
         fontSize: 16,
         fontWeight: '500',
-    }
+    },
+    inputLabel: {
+        color: Colors.textSecondary,
+        fontSize: 14,
+        marginBottom: 8,
+        marginTop: 15,
+    },
+    textInput: {
+        backgroundColor: '#2C2C2C',
+        color: Colors.text,
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 16,
+    },
+    submitBtn: {
+        backgroundColor: Colors.tint,
+        borderRadius: 8,
+        padding: 15,
+        alignItems: 'center',
+        marginTop: 30,
+    },
+    submitBtnText: {
+        color: Colors.background,
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
 });
