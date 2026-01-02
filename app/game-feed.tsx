@@ -1,6 +1,6 @@
 import { View, StyleSheet, TouchableOpacity, ActivityIndicator, SafeAreaView, Text } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { GameModel } from '../src/types/GameModel';
 import { GameStorageService } from '../src/services/GameStorageService';
 import { GameFeedList } from '../src/components/GameFeedList';
@@ -13,6 +13,10 @@ export default function UserGameFeedScreen() {
     const [games, setGames] = useState<GameModel[]>([]);
     const [loading, setLoading] = useState(true);
     const [initialIndex, setInitialIndex] = useState(0);
+
+    const handleSwipeHorizontal = () => {
+        router.back();
+    };
 
     useEffect(() => {
         const loadUserGames = async () => {
@@ -72,7 +76,11 @@ export default function UserGameFeedScreen() {
                 GameFeedList will handle rendering them.
                 We must ensure initialIndex is passed correctly.
             */}
-            <GameFeedList games={games} initialIndex={initialIndex} />
+            <GameFeedList
+                games={games}
+                initialIndex={initialIndex}
+                onSwipeHorizontal={handleSwipeHorizontal}
+            />
 
             <SafeAreaView style={styles.overlay}>
                 <TouchableOpacity style={styles.backButton} onPress={handleBack}>

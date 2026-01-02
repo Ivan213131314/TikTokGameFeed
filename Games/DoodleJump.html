@@ -55,7 +55,7 @@
         }
 
         .hidden {
-            display: none;
+            display: none !important;
             opacity: 0;
             pointer-events: none;
         }
@@ -126,7 +126,6 @@
 <body>
 
     <div id="score-hud">Score: 0</div>
-
     <canvas id="gameCanvas"></canvas>
 
     <div class="controls-hint">
@@ -149,7 +148,6 @@
     </div>
 
     <script>
-        // --- Constants & Config ---
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const startOverlay = document.getElementById('start-overlay');
@@ -157,7 +155,6 @@
         const scoreHud = document.getElementById('score-hud');
         const finalScoreDisplay = document.getElementById('final-score');
 
-        // Physics constants
         const GRAVITY = 0.4;
         const JUMP_FORCE = -10;
         const MOVE_SPEED = 6;
@@ -165,31 +162,20 @@
         const PLATFORM_HEIGHT = 15;
         const PLAYER_SIZE = 20;
 
-        // Game State
-        let gameState = 'START'; // START, PLAYING, GAMEOVER
+        let gameState = 'START';
         let score = 0;
-        let highscore = 0;
         let cameraY = 0;
+        let platforms = [];
+        let input = { left: false, right: false };
 
-        // Input State
-        let input = {
-            left: false,
-            right: false
-        };
-
-        // Entities
         let player = {
             x: 0,
             y: 0,
             radius: PLAYER_SIZE / 2,
             dx: 0,
-            dy: 0,
-            jumpCount: 0
+            dy: 0
         };
 
-        let platforms = [];
-
-        // --- Audio System (Web Audio API) ---
         let audioCtx;
 
         function initAudio() {
@@ -204,84 +190,102 @@
 
         function playSound(type) {
             if (!audioCtx) return;
-
             const osc = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-
-            osc.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
 
             if (type === 'jump') {
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(300, audioCtx.currentTime);
                 osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.1);
-                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
                 osc.start();
                 osc.stop(audioCtx.currentTime + 0.1);
             } else if (type === 'gameover') {
                 osc.type = 'sawtooth';
                 osc.frequency.setValueAtTime(200, audioCtx.currentTime);
                 osc.frequency.linearRampToValueAtTime(50, audioCtx.currentTime + 0.5);
-                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-                gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
                 osc.start();
                 osc.stop(audioCtx.currentTime + 0.5);
             }
         }
 
-        // --- Resize Handling ---
-        fun                            canvas.width = window.innerWidth;
-                            indow.innerHeight;
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
         }
         window.addEventListener('resize', resize);
         resize();
 
-        // --- Input Handling ---
-        function handleInputStart(e) {
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        // Multi-touch Input Handling
+        const activeTouches = new Map();
+
+        function updateInputState() {
+            let left = false;
+            let right = false;
             const halfWidth = window.innerWidth / 2;
-            if (clientX < halfWidth) {
-                input.left = true;
-                input.right = false;
-            } else {
-                input.right = true;
-                input.left = false;
-            }
+
+            activeTouches.forEach((touchX) => {
+                if (touchX < halfWidth) left = true;
+                else right = true;
+            });
+
+            input.left = left;
+            input.right = right;
         }
 
-        function handleInputEnd(e) {
-             input.left = false;
-             input.right                 }
-        
-        function handleKeyDown(e) {
-            f (e.code === 'ArrowLeft') input.left = true;
-            if (e.cod            ight') input.right = true;
-        }
+        window.addEventListener('touchstart', (e) => {
+            Array.from(e.changedTouches).forEach(t => activeTouches.set(t.identifier, t.clientX));
+            updateInputState();
+        });
+        window.addEventListener('touchmove', (e) => {
+            Array.from(e.changedTouches).forEach(t => activeTouches.set(t.identifier, t.clientX));
+            updateInputState();
+        });
+        window.addEventListener('touchend', (e) => {
+            Array.from(e.changedTouches).forEach(t => activeTouches.delete(t.identifier));
+            updateInputState();
+        });
+        window.addEventListener('touchcancel', (e) => {
+            Array.from(e.changedTouches).forEach(t => activeTouches.delete(t.identifier));
+            updateInputState();
+        });
 
-        function han            
-            if (e.code === 'ArrowLeft') input.            
+        window.addEventListener('mousedown', (e) => {
+            activeTouches.set('mouse', e.clientX);
+            updateInputState();
+        });
+        window.addEventListener('mouseup', () => {
+            activeTouches.delete('mouse');
+            updateInputState();
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'ArrowLeft') input.left = true;
+            if (e.code === 'ArrowRight') input.right = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'ArrowLeft') input.left = false;
             if (e.code === 'ArrowRight') input.right = false;
-                  window.addEvent            chstart', handleInputStart);
-  ndow.addEventListener('touchend', handleInputEnd);
-        window.addEventListener('mousedown', handleInputStart); 
-        window.addEventListener('mouseup', handleInputEnd);
-        window.addEventListener('keydown', handleKeyDown);
-        window.addEventListener('keyup', handleKeyUp);
+        });
 
-        // --- Game Logic ---
+        function generatePlatform(y) {
+            const x = Math.random() * (canvas.width - PLATFORM_WIDTH);
+            platforms.push({ x, y, width: PLATFORM_WIDTH, height: PLATFORM_HEIGHT });
+        }
 
         function initGame() {
             player.x = canvas.width / 2;
             player.y = canvas.height - 150;
             player.dx = 0;
-            player.dy = JUMP_FORCE; // Start with a jump
-           
+            player.dy = JUMP_FORCE;
             score = 0;
             cameraY = 0;
-
             platforms = [];
-            // Initial platform under player
             platforms.push({
                 x: canvas.width / 2 - PLATFORM_WIDTH / 2,
                 y: canvas.height - 50,
@@ -289,107 +293,87 @@
                 height: PLATFORM_HEIGHT
             });
 
-            // Generate initial batch of platforms
-  t y = canvas.height - 150;
+            let y = canvas.height - 150;
             while (y > -1000) {
-                y -= (100 + Math.random() * 50); // Gap between 100 and 150
+                y -= 120; // Initial gap
                 generatePlatform(y);
             }
-        }
-
-        function generatePlatform(y) {
-            const x = Math.random() * (canvas.width - PLATFORM_WIDTH);
-            platforms.push({ x, y, width: PLATFORM_WIDTH, height: PLATFORM_HEIGHT });
         }
 
         function update() {
             if (gameState !== 'PLAYING') return;
 
-            // Horizontal Movement
             if (input.left) player.dx = -MOVE_SPEED;
             else if (input.right) player.dx = MOVE_SPEED;
             else player.dx = 0;
 
             player.x += player.dx;
-
-            // Screen Wrap
             if (player.x + player.radius < 0) player.x = canvas.width + player.radius;
             if (player.x - player.radius > canvas.width) player.x = -player.radius;
 
-            // Vertical Physics
             player.dy += GRAVITY;
             player.y += player.dy;
 
-            // Camera Follow (only when going up above mid-screen)
             if (player.y < canvas.height / 2 && player.dy < 0) {
                 const shift = -player.dy;
-                player.y += shift; 
+                player.y += shift;
                 cameraY += shift;
-                score = Math.floor(cameraY / 10); 
+                score = Math.floor(cameraY / 10);
 
                 platforms.forEach(p => p.y += shift);
-                
-                const highestPlatform = platforms[platforms.length - 1];
-                if (highestPlatform.y > 50) { 
-                     generatePlatform(highestPlatform.y - (100 + Math.random() * 60));
-                }
 
+                const highest = platforms[platforms.length - 1];
+                if (highest.y > 50) {
+                    // Difficulty factor: increase gap as score increases
+                    const difficulty = Math.min(100, score / 50);
+                    const minGap = 100 + difficulty;
+                    const maxGap = 160 + difficulty;
+                    generatePlatform(highest.y - (minGap + Math.random() * (maxGap - minGap)));
+                }
                 platforms = platforms.filter(p => p.y < canvas.height);
             }
 
-            // Platform Collision
             if (player.dy > 0) {
                 platforms.forEach(p => {
-                    if (
-                        player.x + player.radius > p.x &&
+                    if (player.x + player.radius > p.x &&
                         player.x - player.radius < p.x + p.width &&
-        player.y + player.radius > p.y &&
-                        player.y + player.radius < p.y + p.height + player.dy 
-                    ) {
+                        player.y + player.radius > p.y &&
+                        player.y + player.radius < p.y + p.height + player.dy) {
                         player.dy = JUMP_FORCE;
-                                 'jump');
+                        playSound('jump');
                     }
                 });
             }
 
-            // Game Over Condition
-            if (player.y - player.radius > canvas.height) {
-                endGame();
-            }
+            if (player.y - player.radius > canvas.height) endGame();
         }
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Draw Background Grid (Subtle)
             ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--grid-color');
             ctx.beginPath();
-            for (let x=0; x<canvas.width; x+=40) { ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); }
-            for (let y=0; y<canvas.height; y+=40) { ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); }
+            for (let x = 0; x < canvas.width; x += 40) { ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); }
+            for (let y = 0; y < canvas.height; y += 40) { ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); }
             ctx.stroke();
 
-            // Draw Platforms
             ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--platform-color');
-            platforms.forEach(p => {
-                ctx.fillRect(p.x, p.y, p.width, p.height);
-            });
+            platforms.forEach(p => ctx.fillRect(p.x, p.y, p.width, p.height));
 
-            // Draw Player
             ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--player-color');
             ctx.beginPath();
             ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
             ctx.fill();
-            
-            // Draw Eyes
+
             ctx.fillStyle = 'white';
             ctx.beginPath();
             ctx.arc(player.x - 5, player.y - 2, 4, 0, Math.PI * 2);
-            ctx.arc(player.x + 5, player.y - 2, 4, 0, Math. P I *  2 );
-             ct x.fill();
-             ctx.fillStyle  = 'black';
+            ctx.arc(player.x + 5, player.y - 2, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'black';
             ctx.beginPath();
-                ctx.arc(pl ay er.x - 3 + (player. dx * 0.2), player.y - 2, 1.5 , 0, Math.PI * 2);
-            ctx.arc(player.x + 7 + (player.dx * 0.2), player.y - 2, 1.5, 0, Math.PI * 2);
+            const eyeOffset = player.dx * 0.2;
+            ctx.arc(player.x - 5 + eyeOffset, player.y - 2, 1.5, 0, Math.PI * 2);
+            ctx.arc(player.x + 5 + eyeOffset, player.y - 2, 1.5, 0, Math.PI * 2);
             ctx.fill();
 
             scoreHud.textContent = `Score: ${score}`;
@@ -407,7 +391,9 @@
             gameOverOverlay.classList.add('hidden');
             gameState = 'PLAYING';
             initGame();
-       function endGame() {
+        }
+
+        function endGame() {
             gameState = 'GAMEOVER';
             playSound('gameover');
             finalScoreDisplay.textContent = score;
@@ -415,7 +401,6 @@
         }
 
         loop();
-
     </script>
 </body>
 

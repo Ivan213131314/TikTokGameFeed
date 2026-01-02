@@ -9,9 +9,10 @@ interface GameContainerProps {
     game: GameModel;
     isActive: boolean;
     onSwipe: (direction: 'up' | 'down') => void;
+    onSwipeHorizontal?: (direction: 'left' | 'right') => void;
 }
 
-export const GameContainer: React.FC<GameContainerProps> = ({ game, isActive, onSwipe }) => {
+export const GameContainer: React.FC<GameContainerProps> = ({ game, isActive, onSwipe, onSwipeHorizontal }) => {
     const [commentsVisible, setCommentsVisible] = useState(false);
 
     // 1. Configure PanResponder to intercept swipes
@@ -23,7 +24,9 @@ export const GameContainer: React.FC<GameContainerProps> = ({ game, isActive, on
             onMoveShouldSetPanResponderCapture: (_, gestureState) => {
                 const { dx, dy } = gestureState;
                 const isVerticalSwipe = Math.abs(dy) > 20 && Math.abs(dy) > Math.abs(dx);
-                if (isVerticalSwipe) {
+                const isHorizontalSwipe = Math.abs(dx) > 20 && Math.abs(dx) > Math.abs(dy);
+
+                if (isVerticalSwipe || isHorizontalSwipe) {
                     return true; // Steal the touch from WebView!
                 }
                 return false;
@@ -32,11 +35,19 @@ export const GameContainer: React.FC<GameContainerProps> = ({ game, isActive, on
                 // Touch stolen.
             },
             onPanResponderRelease: (_, gestureState) => {
-                const { dy } = gestureState;
-                if (dy < -50) {
-                    onSwipe('up'); // Swipe Up -> Next
-                } else if (dy > 50) {
-                    onSwipe('down'); // Swipe Down -> Prev
+                const { dx, dy } = gestureState;
+                if (Math.abs(dy) > Math.abs(dx)) {
+                    if (dy < -50) {
+                        onSwipe('up'); // Swipe Up -> Next
+                    } else if (dy > 50) {
+                        onSwipe('down'); // Swipe Down -> Prev
+                    }
+                } else if (onSwipeHorizontal) {
+                    if (dx < -50) {
+                        onSwipeHorizontal('left'); // Swipe Left -> Profile (TikTok)
+                    } else if (dx > 50) {
+                        onSwipeHorizontal('right'); // Swipe Right
+                    }
                 }
             },
             onPanResponderTerminationRequest: () => false, // Don't let others steal back

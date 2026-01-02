@@ -482,6 +482,98 @@ export const GameStorageService = {
         return count || 0;
     },
 
+    async toggleFollow(followingId: string): Promise<boolean> {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Must be logged in to follow");
+
+        if (user.id === followingId) throw new Error("You cannot follow yourself");
+
+        // Check if already following
+        const { data: existingFollow } = await supabase
+            .from('follows')
+            .select('id')
+            .eq('follower_id', user.id)
+            .eq('following_id', followingId)
+            .maybeSingle();
+
+        if (existingFollow) {
+            // Unfollow
+            await supabase.from('follows').delete().eq('id', existingFollow.id);
+            // Invalidate cache
+            await AsyncStorage.removeItem(CACHE_KEYS.USER_FOLLOWERS(followingId));
+            await AsyncStorage.removeItem(CACHE_KEYS.USER_FOLLOWING(user.id));
+            return false;
+        } else {
+            // Follow
+            await supabase.from('follows').insert({
+                follower_id: user.id,
+                following_id: followingId
+            });
+            // Invalidate cache
+            await AsyncStorage.removeItem(CACHE_KEYS.USER_FOLLOWERS(followingId));
+            await AsyncStorage.removeItem(CACHE_KEYS.USER_FOLLOWING(user.id));
+            return true;
+        }
+    },
+
+    async isFollowing(followingId: string): Promise<boolean> {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return false;
+
+        const { data } = await supabase
+            .from('follows')
+            .select('id')
+            .eq('follower_id', user.id)
+            .eq('following_id', followingId)
+            .maybeSingle();
+
+        return !!data;
+    },
+
+    async getFollowing(userId: string): Promise<import('../types/SocialModels').ProfileModel[]> {
+        const { data, error } = await supabase
+            .from('follows')
+            .select(`
+                following_id,
+                profiles:following_id (id, username, avatar_url, created_at)
+            `)
+            .eq('follower_id', userId);
+
+        if (error) {
+            console.error("Error fetching following profiles:", error);
+            return [];
+        }
+
+        return data.map((f: any) => ({
+            id: f.profiles.id,
+            username: f.profiles.username,
+            avatar_url: f.profiles.avatar_url,
+            created_at: new Date(f.profiles.created_at).getTime()
+        }));
+    },
+
+    async getFollowers(userId: string): Promise<import('../types/SocialModels').ProfileModel[]> {
+        const { data, error } = await supabase
+            .from('follows')
+            .select(`
+                follower_id,
+                profiles:follower_id (id, username, avatar_url, created_at)
+            `)
+            .eq('following_id', userId);
+
+        if (error) {
+            console.error("Error fetching followers profiles:", error);
+            return [];
+        }
+
+        return data.map((f: any) => ({
+            id: f.profiles.id,
+            username: f.profiles.username,
+            avatar_url: f.profiles.avatar_url,
+            created_at: new Date(f.profiles.created_at).getTime()
+        }));
+    },
+
     async updateGame(gameId: string, updates: Partial<GameModel>): Promise<void> {
         // Map frontend model fields to DB fields if necessary
         const dbUpdates: any = {};

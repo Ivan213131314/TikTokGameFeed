@@ -41,6 +41,11 @@ export default function ProfileScreen() {
     const [optionsModalVisible, setOptionsModalVisible] = useState(false);
     const [iconPickerVisible, setIconPickerVisible] = useState(false);
 
+    // Following List State
+    const [followingListVisible, setFollowingListVisible] = useState(false);
+    const [followingList, setFollowingList] = useState<import('../../src/types/SocialModels').ProfileModel[]>([]);
+    const [loadingFollowing, setLoadingFollowing] = useState(false);
+
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session);
@@ -104,6 +109,20 @@ export default function ProfileScreen() {
             }
         } catch (err) {
             console.error("Error picking file:", err);
+        }
+    };
+
+    const loadFollowingList = async () => {
+        if (!session?.user) return;
+        setLoadingFollowing(true);
+        setFollowingListVisible(true);
+        try {
+            const list = await GameStorageService.getFollowing(session.user.id);
+            setFollowingList(list);
+        } catch (e) {
+            console.error("Failed to load following list", e);
+        } finally {
+            setLoadingFollowing(false);
         }
     };
 
@@ -210,10 +229,14 @@ export default function ProfileScreen() {
                         <Text style={styles.statNumber}>{totalLikes}</Text>
                         <Text style={styles.statLabel}>Likes</Text>
                     </View>
-                    <View style={styles.statItem}>
+                    <TouchableOpacity style={styles.statItem} onPress={loadFollowingList}>
+                        <Text style={styles.statNumber}>{followingCount}</Text>
+                        <Text style={styles.statLabel}>Following</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.statItem} onPress={loadFollowingList}>
                         <Text style={styles.statNumber}>{followersCount}</Text>
                         <Text style={styles.statLabel}>Followers</Text>
-                    </View>
+                    </TouchableOpacity>
                 </View>
                 <TouchableOpacity style={styles.signOutBtn} onPress={() => supabase.auth.signOut()}>
                     <Text style={styles.signOutText}>Sign Out</Text>
@@ -368,7 +391,67 @@ export default function ProfileScreen() {
                     </View>
                 </View>
             </Modal>
-        </SafeAreaView>
+
+            {/* Following List Modal */}
+            <Modal
+                visible={followingListVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setFollowingListVisible(false)}
+            >
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setFollowingListVisible(false)}
+                >
+                    <TouchableOpacity
+                        activeOpacity={1}
+                        style={styles.modalContent}
+                        onPress={(e) => e.stopPropagation()}
+                    >
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Following</Text>
+                            <TouchableOpacity onPress={() => setFollowingListVisible(false)}>
+                                <Ionicons name="close" size={24} color={Colors.text} />
+                            </TouchableOpacity>
+                        </View>
+                        {loadingFollowing ? (
+                            <Text style={styles.loadingText}>Loading...</Text>
+                        ) : followingList.length === 0 ? (
+                            <Text style={styles.emptyListText}>You are not following anyone yet</Text>
+                        ) : (
+                            <FlatList
+                                data={followingList}
+                                keyExtractor={(item) => item.id}
+                                showsVerticalScrollIndicator={false}
+                                renderItem={({ item }) => (
+                                    <TouchableOpacity
+                                        style={styles.followerItem}
+                                        onPress={() => {
+                                            setFollowingListVisible(false);
+                                            router.push(`/user/${item.id}`);
+                                        }}
+                                    >
+                                        {item.avatar_url ? (
+                                            <Image
+                                                source={getAvatarSource(item.avatar_url)}
+                                                style={styles.followerAvatar}
+                                            />
+                                        ) : (
+                                            <View style={[styles.followerAvatar, { backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' }]}>
+                                                <Ionicons name="person" size={24} color={Colors.textSecondary} />
+                                            </View>
+                                        )}
+                                        <Text style={styles.followerName}>@{item.username || 'user'}</Text>
+                                        <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
+                                    </TouchableOpacity>
+                                )}
+                            />
+                        )}
+                    </TouchableOpacity>
+                </TouchableOpacity>
+            </Modal>
+        </SafeAreaView >
     );
 }
 
@@ -584,7 +667,8 @@ const styles = StyleSheet.create({
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
         padding: 20,
-        maxHeight: '60%',
+        maxHeight: '90%',
+        minHeight: '50%',
     },
     modalHeader: {
         flexDirection: 'row',
@@ -662,5 +746,34 @@ const styles = StyleSheet.create({
         color: Colors.text,
         fontSize: 16,
         fontWeight: 'bold',
+    },
+    loadingText: {
+        color: Colors.textSecondary,
+        textAlign: 'center',
+        marginVertical: 20,
+    },
+    emptyListText: {
+        color: Colors.textSecondary,
+        textAlign: 'center',
+        marginVertical: 20,
+    },
+    followerItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderBottomWidth: 0.5,
+        borderBottomColor: Colors.separator,
+    },
+    followerAvatar: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        marginRight: 12,
+    },
+    followerName: {
+        flex: 1,
+        color: Colors.text,
+        fontSize: 16,
+        fontWeight: '500',
     }
 });

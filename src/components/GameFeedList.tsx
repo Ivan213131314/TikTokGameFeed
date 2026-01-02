@@ -10,10 +10,11 @@ interface GameFeedListProps {
     games: GameModel[];
     initialIndex?: number;
     onEndReached?: () => void;
+    onSwipeHorizontal?: (item: GameModel, direction: 'left' | 'right') => void;
     style?: any;
 }
 
-export function GameFeedList({ games, initialIndex = 0, onEndReached, style }: GameFeedListProps) {
+export function GameFeedList({ games, initialIndex = 0, onEndReached, onSwipeHorizontal, style }: GameFeedListProps) {
     const { height } = useWindowDimensions();
     const [activePage, setActivePage] = useState(initialIndex);
     const flatListRef = useRef<FlatList>(null);
@@ -83,6 +84,7 @@ export function GameFeedList({ games, initialIndex = 0, onEndReached, style }: G
                             game={item}
                             isActive={activePage === index}
                             onSwipe={(dir) => handleSwipe(index, dir)}
+                            onSwipeHorizontal={(dir) => onSwipeHorizontal?.(item, dir)}
                         />
                     </View>
                 )}

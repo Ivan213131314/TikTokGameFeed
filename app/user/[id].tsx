@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Dimensions } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Dimensions, PanResponder } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, Stack, router } from 'expo-router';
 import { GameStorageService } from '../../src/services/GameStorageService';
@@ -32,6 +32,29 @@ export default function UserProfileScreen() {
     const [profile, setProfile] = useState<ProfileModel | null>(null);
     const [games, setGames] = useState<GameModel[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isFollowing, setIsFollowing] = useState(false);
+    const [followersCount, setFollowersCount] = useState(0);
+    const [followingCount, setFollowingCount] = useState(0);
+    const [totalLikes, setTotalLikes] = useState(0);
+
+    // Add PanResponder for back gesture
+    const panResponder = useRef(
+        PanResponder.create({
+            onMoveShouldSetPanResponder: (_, gestureState) => {
+                const { dx, dy } = gestureState;
+                // Capture if horizontal swipe is dominant and significant
+                return Math.abs(dx) > 20 && Math.abs(dx) > Math.abs(dy);
+            },
+            onPanResponderRelease: (_, gestureState) => {
+                const { dx } = gestureState;
+                if (dx < -50) { // Swipe Left (Finger moves right to left)
+                    router.back();
+                } else if (dx > 50) { // Standard iOS Back (Swipe Right)
+                    router.back();
+                }
+            },
+        })
+    ).current;
 
     useEffect(() => {
         if (id) {
@@ -42,16 +65,41 @@ export default function UserProfileScreen() {
     const loadProfile = async () => {
         setLoading(true);
         try {
-            const [profileData, gamesData] = await Promise.all([
+            const [profileData, gamesData, followingStatus, followers, following, likes] = await Promise.all([
                 GameStorageService.getUserProfile(id!),
-                GameStorageService.getUserGames(id!)
+                GameStorageService.getUserGames(id!),
+                GameStorageService.isFollowing(id!),
+                GameStorageService.getFollowersCount(id!),
+                GameStorageService.getFollowingCount(id!),
+                GameStorageService.getUserTotalLikes(id!)
             ]);
             setProfile(profileData);
             setGames(gamesData);
+            setIsFollowing(followingStatus);
+            setFollowersCount(followers);
+            setFollowingCount(following);
+            setTotalLikes(likes);
         } catch (e) {
             console.error(e);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleFollow = async () => {
+        try {
+            const newStatus = await GameStorageService.toggleFollow(id!);
+            setIsFollowing(newStatus);
+            // Refresh counts
+            const followers = await GameStorageService.getFollowersCount(id!);
+            setFollowersCount(followers);
+        } catch (e: any) {
+            console.error(e);
+            if (e.message?.includes("logged in")) {
+                alert("Please log in to follow users");
+            } else {
+                alert(e.message || "Failed to follow");
+            }
         }
     };
 
@@ -110,12 +158,20 @@ export default function UserProfileScreen() {
     }
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} {...panResponder.panHandlers}>
             <Stack.Screen options={{
                 headerShown: true,
                 headerTitle: profile.username || 'Profile',
                 headerStyle: { backgroundColor: 'black' },
                 headerTintColor: 'white',
+                headerLeft: () => (
+                    <TouchableOpacity
+                        onPress={() => router.back()}
+                        style={{ marginLeft: 10 }}
+                    >
+                        <Ionicons name="chevron-back" size={28} color="white" />
+                    </TouchableOpacity>
+                ),
             }} />
 
             <View style={styles.header}>
@@ -130,14 +186,23 @@ export default function UserProfileScreen() {
                         <Text style={styles.statLabel}>Games</Text>
                     </View>
                     <View style={styles.stat}>
-                        <Text style={styles.statValue}>0</Text>
+                        <Text style={styles.statValue}>{totalLikes}</Text>
                         <Text style={styles.statLabel}>Likes</Text>
                     </View>
                     <View style={styles.stat}>
-                        <Text style={styles.statValue}>0</Text>
-                        <Text style={styles.statLabel}>Following</Text>
+                        <Text style={styles.statValue}>{followersCount}</Text>
+                        <Text style={styles.statLabel}>Followers</Text>
                     </View>
                 </View>
+
+                <TouchableOpacity
+                    style={[styles.followButton, isFollowing && styles.followingButton]}
+                    onPress={handleFollow}
+                >
+                    <Text style={[styles.followButtonText, isFollowing && styles.followingButtonText]}>
+                        {isFollowing ? 'Following' : 'Follow'}
+                    </Text>
+                </TouchableOpacity>
             </View>
 
             <View style={styles.divider} />
@@ -180,7 +245,25 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 18,
         fontWeight: 'bold',
-        marginBottom: 20,
+        marginBottom: 15,
+    },
+    followButton: {
+        backgroundColor: '#FE2C55', // TikTok Red
+        paddingHorizontal: 40,
+        paddingVertical: 10,
+        borderRadius: 4,
+        marginTop: 15,
+    },
+    followingButton: {
+        backgroundColor: '#333',
+    },
+    followButtonText: {
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
+    followingButtonText: {
+        color: '#eee',
     },
     statsRow: {
         flexDirection: 'row',

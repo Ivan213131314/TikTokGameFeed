@@ -3,8 +3,9 @@ import { Colors } from '../../src/constants/Colors';
 import { useState, useCallback, useMemo } from 'react';
 import { GameModel } from '../../src/types/GameModel';
 import { GameStorageService } from '../../src/services/GameStorageService';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { shuffleArray } from '../../src/utils/arrayUtils';
 import { GameFeedList } from '../../src/components/GameFeedList';
 
 export default function GameFeedScreen() {
@@ -20,7 +21,7 @@ export default function GameFeedScreen() {
   const loadGames = async () => {
     await GameStorageService.seedDefaultGames();
     const loadedGames = await GameStorageService.getGames();
-    setGames(loadedGames);
+    setGames(shuffleArray(loadedGames));
   };
 
   useFocusEffect(
@@ -39,9 +40,15 @@ export default function GameFeedScreen() {
     )
   }
 
+  const handleSwipeHorizontal = (game: GameModel, direction: 'left' | 'right') => {
+    if (direction === 'left' && game.user_id) {
+      router.push(`/user/${game.user_id}`);
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <GameFeedList games={infiniteGames} />
+      <GameFeedList games={infiniteGames} onSwipeHorizontal={handleSwipeHorizontal} />
     </View>
   );
 }
