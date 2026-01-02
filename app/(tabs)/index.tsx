@@ -1,20 +1,14 @@
-import { StyleSheet, View, Text, useWindowDimensions, SafeAreaView, FlatList } from 'react-native';
+import { StyleSheet, View, Text, useWindowDimensions, SafeAreaView } from 'react-native';
 import { Colors } from '../../src/constants/Colors';
 import { useState, useCallback, useMemo } from 'react';
 import { GameModel } from '../../src/types/GameModel';
 import { GameStorageService } from '../../src/services/GameStorageService';
 import { useFocusEffect } from 'expo-router';
-import { GameContainer } from '../../src/components/GameContainer';
 import { Ionicons } from '@expo/vector-icons';
-
-import { useRef } from 'react';
-// ... other imports
+import { GameFeedList } from '../../src/components/GameFeedList';
 
 export default function GameFeedScreen() {
-  const { height } = useWindowDimensions();
   const [games, setGames] = useState<GameModel[]>([]);
-  const [activePage, setActivePage] = useState(0);
-  const flatListRef = useRef<FlatList>(null);
 
   // Create an "infinite" list by repeating the games multiple times
   const infiniteGames = useMemo(() => {
@@ -35,25 +29,6 @@ export default function GameFeedScreen() {
     }, [])
   );
 
-  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: any[] }) => {
-    if (viewableItems.length > 0) {
-      setActivePage(viewableItems[0].index ?? 0);
-    }
-  }, []);
-
-  const handleSwipe = useCallback((currentIndex: number, direction: 'up' | 'down') => {
-    const nextIndex = direction === 'up' ? currentIndex + 1 : currentIndex - 1;
-
-    // Bounds check
-    if (nextIndex >= 0 && nextIndex < infiniteGames.length) {
-      flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
-    }
-  }, [infiniteGames.length]);
-
-  const viewabilityConfig = {
-    itemVisiblePercentThreshold: 50
-  };
-
   if (games.length === 0) {
     return (
       <SafeAreaView style={styles.emptyContainer}>
@@ -66,30 +41,7 @@ export default function GameFeedScreen() {
 
   return (
     <View style={styles.container}>
-      <FlatList
-        ref={flatListRef}
-        data={infiniteGames}
-        renderItem={({ item, index }) => (
-          <View style={[styles.page, { height }]}>
-            <GameContainer
-              game={item}
-              isActive={activePage === index}
-              onSwipe={(dir) => handleSwipe(index, dir)}
-            />
-          </View>
-        )}
-        keyExtractor={(item, index) => `${item.id}_${index}`}
-        snapToInterval={height}
-        snapToAlignment="start"
-        decelerationRate="fast"
-        showsVerticalScrollIndicator={false}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
-        initialNumToRender={3}
-        maxToRenderPerBatch={3}
-        windowSize={5}
-        scrollEnabled={false} // Disable native scroll, we drive it manually now!
-      />
+      <GameFeedList games={infiniteGames} />
     </View>
   );
 }
@@ -98,12 +50,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'black',
-  },
-  pager: {
-    flex: 1,
-  },
-  page: {
-    flex: 1,
   },
   emptyContainer: {
     flex: 1,
@@ -125,3 +71,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
   }
 });
+

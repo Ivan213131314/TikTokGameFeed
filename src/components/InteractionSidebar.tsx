@@ -1,14 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { GameModel } from '../types/GameModel';
 import { GameStorageService } from '../services/GameStorageService';
 import { GameStats } from '../types/SocialModels';
 import { router } from 'expo-router';
 import { getAvatarSource } from '../constants/Avatars';
-
-// Simple global cache for avatars to avoid refetching too much (could be improved with TanStack Query)
-const avatarCache: Record<string, string> = {};
 
 interface InteractionSidebarProps {
     game: GameModel;
@@ -17,7 +15,7 @@ interface InteractionSidebarProps {
 
 export const InteractionSidebar: React.FC<InteractionSidebarProps> = ({ game, onCommentPress }) => {
     const [stats, setStats] = useState<GameStats>({ likesCount: 0, commentsCount: 0, isLiked: false });
-    const [usersAvatar, setUsersAvatar] = useState<Record<string, string>>(avatarCache);
+    const [userAvatar, setUserAvatar] = useState<string | null>(null);
 
     useEffect(() => {
         loadStats();
@@ -26,15 +24,11 @@ export const InteractionSidebar: React.FC<InteractionSidebarProps> = ({ game, on
 
     const loadAvatar = async () => {
         if (!game.user_id) return;
-        if (avatarCache[game.user_id]) {
-            setUsersAvatar(prev => ({ ...prev, [game.user_id!]: avatarCache[game.user_id!] }));
-            return;
-        }
 
+        // Try to get from cache/service which now caches profile
         const profile = await GameStorageService.getUserProfile(game.user_id);
         if (profile?.avatar_url) {
-            avatarCache[game.user_id] = profile.avatar_url;
-            setUsersAvatar(prev => ({ ...prev, [game.user_id!]: profile.avatar_url }));
+            setUserAvatar(profile.avatar_url);
         }
     };
 
@@ -84,8 +78,10 @@ export const InteractionSidebar: React.FC<InteractionSidebarProps> = ({ game, on
             <TouchableOpacity style={styles.actionButton} onPress={handleProfilePress}>
                 <View style={styles.avatarContainer}>
                     <Image
-                        source={getAvatarSource(game.user_id && usersAvatar[game.user_id] ? usersAvatar[game.user_id] : 'https://placehold.co/100x100/png')}
+                        source={getAvatarSource(userAvatar || 'https://placehold.co/100x100/png')}
                         style={styles.avatar}
+                        contentFit="cover"
+                        cachePolicy="disk"
                     />
                 </View>
             </TouchableOpacity>

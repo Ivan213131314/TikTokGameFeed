@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View, TouchableOpacity, FlatList, SafeAreaView, RefreshControl, Alert, Image, Modal, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, FlatList, SafeAreaView, RefreshControl, Alert, Modal, ScrollView } from 'react-native';
+import { Image } from 'expo-image';
 import * as DocumentPicker from 'expo-document-picker';
 import { Colors } from '../../src/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,7 +7,7 @@ import { GameModel } from '../../src/types/GameModel';
 import { GameStorageService } from '../../src/services/GameStorageService';
 import { AVATAR_ASSETS, getAvatarSource } from '../../src/constants/Avatars';
 import { useState, useEffect, useCallback } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
 import Auth from '../../src/components/Auth';
@@ -23,11 +24,22 @@ const getIconIndex = (id: string, count: number) => {
 };
 
 export default function ProfileScreen() {
+    const router = useRouter();
     const [session, setSession] = useState<Session | null>(null);
     const [games, setGames] = useState<GameModel[]>([]);
     const [refreshing, setRefreshing] = useState(false);
     const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
     const [modalVisible, setModalVisible] = useState(false);
+
+    // New Stats State
+    const [totalLikes, setTotalLikes] = useState(0);
+    const [followersCount, setFollowersCount] = useState(0);
+    const [followingCount, setFollowingCount] = useState(0);
+
+    // Game Interactions
+    const [selectedGame, setSelectedGame] = useState<GameModel | null>(null);
+    const [optionsModalVisible, setOptionsModalVisible] = useState(false);
+    const [iconPickerVisible, setIconPickerVisible] = useState(false);
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -41,15 +53,25 @@ export default function ProfileScreen() {
         return () => subscription.unsubscribe();
     }, []);
 
-    const loadGames = async () => {
+    const loadGames = async (forceRefresh = false) => {
         if (!session?.user) return;
-        const loadedGames = await GameStorageService.getUserGames(session.user.id);
+        const loadedGames = await GameStorageService.getUserGames(session.user.id, forceRefresh);
         setGames(loadedGames);
 
         const profile = await GameStorageService.getUserProfile(session.user.id);
         if (profile?.avatar_url) {
             setAvatarUrl(profile.avatar_url);
         }
+
+        // Load Stats (add basic caching or let them load fast from DB)
+        // Since we added caching to them in service, they should be fast now.
+        const likes = await GameStorageService.getUserTotalLikes(session.user.id);
+        const followers = await GameStorageService.getFollowersCount(session.user.id);
+        const following = await GameStorageService.getFollowingCount(session.user.id);
+
+        setTotalLikes(likes);
+        setFollowersCount(followers);
+        setFollowingCount(following);
     };
 
     useFocusEffect(
@@ -62,7 +84,7 @@ export default function ProfileScreen() {
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
-        await loadGames();
+        await loadGames(true);
         setRefreshing(false);
     }, []);
 
@@ -104,7 +126,39 @@ export default function ProfileScreen() {
         }
     };
 
-    const deleteGame = async (id: string) => {
+    const handleLongPress = (game: GameModel) => {
+        setSelectedGame(game);
+        setOptionsModalVisible(true);
+    };
+
+    const handleChangeIconRequest = () => {
+        setOptionsModalVisible(false);
+        setTimeout(() => setIconPickerVisible(true), 300); // Wait for close animation
+    };
+
+    const handleIconSelect = async (iconIndex: number) => {
+        if (!selectedGame) return;
+
+        // Optimistic update
+        const updatedGames = games.map(g =>
+            g.id === selectedGame.id ? { ...g, icon_asset_key: `game_icon_${iconIndex}` } : g
+        );
+        setGames(updatedGames);
+        setIconPickerVisible(false);
+
+        try {
+            await GameStorageService.updateGame(selectedGame.id, { icon_asset_key: `game_icon_${iconIndex}` });
+        } catch (e) {
+            console.error("Failed to update game icon", e);
+            Alert.alert("Error", "Failed to update icon");
+            loadGames(); // Revert on error
+        }
+    };
+
+    const handleDeleteRequest = () => {
+        setOptionsModalVisible(false);
+        if (!selectedGame) return;
+
         Alert.alert(
             "Delete Game",
             "Are you sure you want to delete this game? This cannot be undone.",
@@ -114,12 +168,18 @@ export default function ProfileScreen() {
                     text: "Delete",
                     style: "destructive",
                     onPress: async () => {
-                        await GameStorageService.deleteGame(id);
+                        await GameStorageService.deleteGame(selectedGame.id);
                         await loadGames();
                     }
                 }
             ]
         );
+    };
+
+    const deleteGame = async (id: string) => {
+        // Legacy direct delete, keeping just in case or redirect to new flow
+        const game = games.find(g => g.id === id);
+        if (game) handleLongPress(game);
     };
 
     if (!session) {
@@ -139,8 +199,22 @@ export default function ProfileScreen() {
                         <Ionicons name="key" size={12} color="white" />
                     </View>
                 </TouchableOpacity>
-                <Text style={styles.username}>{session.user.email?.split('@')[0]}</Text>
-                <Text style={styles.stats}>{games.length} Games • 0 Likes</Text>
+                <Text style={styles.username}>@{session.user.email?.split('@')[0]}</Text>
+
+                <View style={styles.statsContainer}>
+                    <View style={styles.statItem}>
+                        <Text style={styles.statNumber}>{games.length}</Text>
+                        <Text style={styles.statLabel}>Games</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                        <Text style={styles.statNumber}>{totalLikes}</Text>
+                        <Text style={styles.statLabel}>Likes</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                        <Text style={styles.statNumber}>{followersCount}</Text>
+                        <Text style={styles.statLabel}>Followers</Text>
+                    </View>
+                </View>
                 <TouchableOpacity style={styles.signOutBtn} onPress={() => supabase.auth.signOut()}>
                     <Text style={styles.signOutText}>Sign Out</Text>
                 </TouchableOpacity>
@@ -169,24 +243,49 @@ export default function ProfileScreen() {
                     <FlatList
                         data={games}
                         keyExtractor={(item) => item.id}
+                        numColumns={3}
                         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.tint} />}
-                        renderItem={({ item }) => (
-                            <View style={styles.gameItem}>
-                                <View style={styles.gameIcon}>
-                                    <Image
-                                        source={GAME_ICONS[getIconIndex(item.id, GAME_ICONS.length)]}
-                                        style={styles.gameIconImage}
-                                    />
-                                </View>
-                                <View style={styles.gameInfo}>
-                                    <Text style={styles.gameName}>{item.name.replace(/\.html$/i, '')}</Text>
-                                    <Text style={styles.gameDate}>{new Date(item.dateAdded).toLocaleDateString()}</Text>
-                                </View>
-                                <TouchableOpacity onPress={() => deleteGame(item.id)}>
-                                    <Ionicons name="trash-outline" size={20} color={Colors.textSecondary} />
+                        columnWrapperStyle={styles.row}
+                        renderItem={({ item }) => {
+                            const iconKey = item.icon_asset_key;
+                            let iconSource;
+                            if (iconKey && iconKey.startsWith('game_icon_')) {
+                                const index = parseInt(iconKey.replace('game_icon_', ''), 10);
+                                if (!isNaN(index) && index >= 0 && index < GAME_ICONS.length) {
+                                    iconSource = GAME_ICONS[index];
+                                }
+                            }
+
+                            if (!iconSource) {
+                                iconSource = GAME_ICONS[getIconIndex(item.id, GAME_ICONS.length)];
+                            }
+
+                            return (
+                                <TouchableOpacity
+                                    style={styles.gridItem}
+                                    onPress={() => {
+                                        if (session?.user) {
+                                            router.push({
+                                                pathname: '/game-feed',
+                                                params: { userId: session.user.id, initialGameId: item.id }
+                                            });
+                                        }
+                                    }}
+                                    onLongPress={() => handleLongPress(item)}
+                                >
+                                    <View style={styles.gridIconContainer}>
+                                        <Image
+                                            source={iconSource}
+                                            style={styles.gridIconImage}
+                                            contentFit="contain"
+                                        />
+                                        <View style={styles.gridOverlay} />
+                                        <Ionicons name="play" size={20} color="white" style={styles.playIcon} />
+                                    </View>
+                                    <Text style={styles.gridItemText} numberOfLines={1}>{item.name.replace(/\.html$/i, '')}</Text>
                                 </TouchableOpacity>
-                            </View>
-                        )}
+                            );
+                        }}
                     />
                 )}
             </View>
@@ -215,6 +314,60 @@ export default function ProfileScreen() {
                     </View>
                 </View>
             </Modal>
+
+            {/* Game Options Modal */}
+            <Modal
+                visible={optionsModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setOptionsModalVisible(false)}
+            >
+                <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setOptionsModalVisible(false)}>
+                    <View style={styles.optionModalContent}>
+                        <Text style={styles.optionTitle}>{selectedGame?.name.replace(/\.html$/i, '')}</Text>
+
+                        <TouchableOpacity style={styles.optionButton} onPress={handleChangeIconRequest}>
+                            <Ionicons name="image-outline" size={24} color={Colors.text} />
+                            <Text style={styles.optionText}>Change Icon</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.optionButtonDestructive} onPress={handleDeleteRequest}>
+                            <Ionicons name="trash-outline" size={24} color="#FF3B30" />
+                            <Text style={styles.optionTextDestructive}>Delete Game</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.cancelButton} onPress={() => setOptionsModalVisible(false)}>
+                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
+            {/* Icon Picker Modal */}
+            <Modal
+                visible={iconPickerVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setIconPickerVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Choose Game Icon</Text>
+                            <TouchableOpacity onPress={() => setIconPickerVisible(false)}>
+                                <Ionicons name="close" size={24} color={Colors.text} />
+                            </TouchableOpacity>
+                        </View>
+                        <ScrollView contentContainerStyle={styles.avatarGrid} showsVerticalScrollIndicator={false}>
+                            {GAME_ICONS.map((icon, index) => (
+                                <TouchableOpacity key={index} onPress={() => handleIconSelect(index)} style={styles.avatarGridItem}>
+                                    <Image source={icon} style={styles.gridAvatarImage} />
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -233,14 +386,30 @@ const styles = StyleSheet.create({
     },
     username: {
         color: Colors.text,
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: 'bold',
         marginTop: 10,
+        marginBottom: 15,
     },
-    stats: {
+    statsContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        width: '100%',
+        marginBottom: 10,
+    },
+    statItem: {
+        alignItems: 'center',
+        marginHorizontal: 20,
+    },
+    statNumber: {
+        color: Colors.text,
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    statLabel: {
         color: Colors.textSecondary,
-        fontSize: 14,
-        marginTop: 5,
+        fontSize: 12,
+        marginTop: 2,
     },
     signOutBtn: {
         marginTop: 15,
@@ -325,11 +494,7 @@ const styles = StyleSheet.create({
         marginRight: 12,
         overflow: 'hidden',
     },
-    gameIconImage: {
-        width: '100%',
-        height: '100%',
-        resizeMode: 'cover',
-    },
+
     gameInfo: {
         flex: 1,
     },
@@ -342,6 +507,47 @@ const styles = StyleSheet.create({
         color: Colors.textSecondary,
         fontSize: 12,
         marginTop: 2,
+    },
+    row: {
+        justifyContent: 'flex-start',
+    },
+    gridItem: {
+        width: '33.33%',
+        aspectRatio: 0.8, // Taller than wide
+        padding: 1,
+        marginBottom: 1,
+    },
+    gridIconContainer: {
+        flex: 1,
+        backgroundColor: '#2A2A2A',
+        position: 'relative',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    gridIconImage: {
+        width: '70%',
+        height: '70%',
+        resizeMode: 'contain',
+    },
+    gridOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.2)',
+    },
+    playIcon: {
+        position: 'absolute',
+        opacity: 0.8,
+    },
+    gridItemText: {
+        position: 'absolute',
+        bottom: 5,
+        left: 5,
+        right: 5,
+        color: 'white',
+        fontSize: 10,
+        fontWeight: 'bold',
+        textShadowColor: 'rgba(0,0,0,0.75)',
+        textShadowOffset: { width: -1, height: 1 },
+        textShadowRadius: 10,
     },
     avatarWrapper: {
         position: 'relative',
@@ -405,5 +611,56 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
         borderRadius: 10,
+    },
+    optionModalContent: {
+        backgroundColor: '#1E1E1E',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        padding: 20,
+        paddingBottom: 40,
+        width: '100%',
+    },
+    optionTitle: {
+        color: Colors.textSecondary,
+        fontSize: 14,
+        textAlign: 'center',
+        marginBottom: 20,
+    },
+    optionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.separator,
+    },
+    optionButtonDestructive: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 15,
+        marginTop: 5,
+    },
+    optionText: {
+        color: Colors.text,
+        fontSize: 16,
+        marginLeft: 15,
+        fontWeight: '500',
+    },
+    optionTextDestructive: {
+        color: '#FF3B30',
+        fontSize: 16,
+        marginLeft: 15,
+        fontWeight: '500',
+    },
+    cancelButton: {
+        marginTop: 10,
+        alignItems: 'center',
+        paddingVertical: 15,
+        backgroundColor: '#2C2C2C',
+        borderRadius: 10,
+    },
+    cancelButtonText: {
+        color: Colors.text,
+        fontSize: 16,
+        fontWeight: 'bold',
     }
 });

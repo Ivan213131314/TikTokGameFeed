@@ -25,9 +25,13 @@
   - Читает файл по `sourceUri`.
   - Загружает контент и метаданные в Supabase.
   - Требует авторизации.
+- `updateGame(gameId, updates)`: Обновляет метаданные игры (например, `icon_asset_key`).
 - `deleteGame(id)`: Удаляет игру (только свою).
 - `toggleLike(gameId)`: Ставит или убирает лайк.
 - `getGameStats(gameId)`: Возвращает кол-во лайков, комментариев и статус `isLiked` для текущего пользователя.
+- `getUserTotalLikes(userId)`: Возвращает сумму лайков всех игр пользователя.
+- `getFollowersCount(userId)`: Возвращает количество подписчиков.
+- `getFollowingCount(userId)`: Возвращает количество подписок.
 - `getComments(gameId)`: Возвращает список комментариев с профилями авторов.
 - `addComment(gameId, content)`: Добавляет комментарий.
 - `seedDefaultGames()`: Создает дефолтную игру ("Falling Square"), если пользователь авторизован и хочет заполнить БД.

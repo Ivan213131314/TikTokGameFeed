@@ -22,12 +22,21 @@
 - `html_content` (Text) - Полный исходный код HTML5 игры.
 - `created_at` (Timestamp) - Дата создания.
 - `description` (Text, Optional) - Описание.
+- `icon_asset_key` (Text, Optional) - Ключ локального ассета иконки (напр. `game_icon_5`).
 
 ### `likes`
 Таблица связки для лайков.
 - `id` (UUID, Primary Key)
 - `game_id` (UUID, Foreign Key -> `games`)
 - `user_id` (UUID, Foreign Key -> `auth.users`)
+
+### `follows`
+Таблица социальных связей (подписки).
+- `id` (UUID, Primary Key)
+- `follower_id` (UUID, Foreign Key -> `profiles.id`) - Кто подписывается.
+- `following_id` (UUID, Foreign Key -> `profiles.id`) - На кого подписываются.
+- `created_at` (Timestamp).
+- Unique constraint: `(follower_id, following_id)`.
 
 ### `comments`
 Комментарии пользователей к играм.

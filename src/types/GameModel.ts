@@ -5,4 +5,5 @@ export interface GameModel {
     html_content?: string; // Source code from DB
     dateAdded: number;
     user_id?: string;
+    icon_asset_key?: string;
 }

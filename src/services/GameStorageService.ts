@@ -1,5 +1,54 @@
 import { supabase } from '../../lib/supabase';
 import { GameModel } from '../types/GameModel';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const CACHE_KEYS = {
+    USER_GAMES: (userId: string) => `cache_user_games_${userId}`,
+    GAME_STATS: (gameId: string) => `cache_game_stats_${gameId}`,
+    USER_PROFILE: (userId: string) => `cache_user_profile_${userId}`,
+    USER_LIKES: (userId: string) => `cache_total_likes_${userId}`,
+    USER_FOLLOWERS: (userId: string) => `cache_followers_${userId}`,
+    USER_FOLLOWING: (userId: string) => `cache_following_${userId}`,
+};
+
+const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes default
+
+async function getCached<T>(key: string): Promise<T | null> {
+    try {
+        const item = await AsyncStorage.getItem(key);
+        if (!item) return null;
+
+        const parsed = JSON.parse(item);
+        if (Date.now() - parsed.timestamp > CACHE_EXPIRY) {
+            // Cache expired, but maybe we can return it if network fails? 
+            // For now, treat as strictly expired to ensure freshness, 
+            // but we could implement stale-while-revalidate strategy if needed.
+            // Let's implement stale-while-revalidate manually in the service methods.
+            return parsed.data; // Return data anyway, let caller decide or just use it.
+            // Actually, simplest is: valid if not expired.
+            // Let's return null if expired for strict freshness, or data if we want speed.
+            // Given requirement "don't load every time", we want speed.
+            // Let's return cached data but maybe mark it? 
+            // For simplicity, let's just return it and rely on explicit refresh for updates.
+            return parsed.data;
+        }
+        return parsed.data;
+    } catch (e) {
+        return null;
+    }
+}
+
+async function setCache(key: string, data: any) {
+    try {
+        await AsyncStorage.setItem(key, JSON.stringify({
+            data,
+            timestamp: Date.now()
+        }));
+    } catch (e) {
+        console.error("Failed to cache item", e);
+    }
+}
+
 
 export const GameStorageService = {
     async initialize() {
@@ -27,7 +76,14 @@ export const GameStorageService = {
         }));
     },
 
-    async getUserGames(userId: string): Promise<GameModel[]> {
+    async getUserGames(userId: string, forceRefresh = false): Promise<GameModel[]> {
+        const cacheKey = CACHE_KEYS.USER_GAMES(userId);
+
+        if (!forceRefresh) {
+            const cached = await getCached<GameModel[]>(cacheKey);
+            if (cached) return cached;
+        }
+
         const { data, error } = await supabase
             .from('games')
             .select('*')
@@ -39,13 +95,17 @@ export const GameStorageService = {
             return [];
         }
 
-        return data.map((game: any) => ({
+        const games = data.map((game: any) => ({
             id: game.id,
             name: game.title,
             html_content: game.html_content,
             dateAdded: new Date(game.created_at).getTime(),
             user_id: game.user_id,
+            icon_asset_key: game.icon_asset_key // Ensure this is mapped if present
         }));
+
+        await setCache(cacheKey, games);
+        return games;
     },
 
     async addGame(name: string, sourceUri: string): Promise<GameModel> {
@@ -278,6 +338,10 @@ export const GameStorageService = {
     },
 
     async getUserProfile(userId: string): Promise<import('../types/SocialModels').ProfileModel | null> {
+        const cacheKey = CACHE_KEYS.USER_PROFILE(userId);
+        const cached = await getCached<import('../types/SocialModels').ProfileModel>(cacheKey);
+        if (cached) return cached;
+
         const { data, error } = await supabase
             .from('profiles')
             .select('*')
@@ -286,12 +350,14 @@ export const GameStorageService = {
 
         if (error) return null;
 
-        return {
+        const profile = {
             id: data.id,
             username: data.username,
             avatar_url: data.avatar_url,
             created_at: new Date(data.created_at).getTime()
         };
+        await setCache(cacheKey, profile);
+        return profile;
     },
 
     async uploadAvatar(userId: string, imageUri: string): Promise<string | null> {
@@ -343,6 +409,96 @@ export const GameStorageService = {
 
         if (error) {
             console.error("Error updating profile:", error);
+            throw error;
+        }
+    },
+
+    async getUserTotalLikes(userId: string): Promise<number> {
+        const cacheKey = CACHE_KEYS.USER_LIKES(userId);
+        const cached = await getCached<number>(cacheKey);
+        if (cached !== null) return cached;
+
+        // We need to sum up likes for all games owned by the user.
+        // First, get all game IDs for the user.
+        const { data: games, error: gamesError } = await supabase
+            .from('games')
+            .select('id')
+            .eq('user_id', userId);
+
+        if (gamesError || !games) return 0;
+
+        if (games.length === 0) return 0;
+
+        const gameIds = games.map(g => g.id);
+
+        // Count likes where game_id is in the list
+        const { count, error } = await supabase
+            .from('likes')
+            .select('id', { count: 'exact', head: true })
+            .in('game_id', gameIds);
+
+        if (error) {
+            console.error("Error fetching total likes:", error);
+            return 0;
+        }
+
+        await setCache(cacheKey, count || 0);
+        return count || 0;
+    },
+
+    async getFollowersCount(userId: string): Promise<number> {
+        const cacheKey = CACHE_KEYS.USER_FOLLOWERS(userId);
+        const cached = await getCached<number>(cacheKey);
+        if (cached !== null) return cached;
+
+        const { count, error } = await supabase
+            .from('follows')
+            .select('id', { count: 'exact', head: true })
+            .eq('following_id', userId);
+
+        if (error) {
+            console.error("Error fetching followers count:", error);
+            return 0;
+        }
+        await setCache(cacheKey, count || 0);
+        return count || 0;
+    },
+
+    async getFollowingCount(userId: string): Promise<number> {
+        const cacheKey = CACHE_KEYS.USER_FOLLOWING(userId);
+        const cached = await getCached<number>(cacheKey);
+        if (cached !== null) return cached;
+
+        const { count, error } = await supabase
+            .from('follows')
+            .select('id', { count: 'exact', head: true })
+            .eq('follower_id', userId);
+
+        if (error) {
+            console.error("Error fetching following count:", error);
+            return 0;
+        }
+        await setCache(cacheKey, count || 0);
+        return count || 0;
+    },
+
+    async updateGame(gameId: string, updates: Partial<GameModel>): Promise<void> {
+        // Map frontend model fields to DB fields if necessary
+        const dbUpdates: any = {};
+        if (updates.name) dbUpdates.title = updates.name;
+        if (updates.icon_asset_key) dbUpdates.icon_asset_key = updates.icon_asset_key;
+
+        // Add other fields mapping if needed in future
+
+        if (Object.keys(dbUpdates).length === 0) return;
+
+        const { error } = await supabase
+            .from('games')
+            .update(dbUpdates)
+            .eq('id', gameId);
+
+        if (error) {
+            console.error("Error updating game:", error);
             throw error;
         }
     }
