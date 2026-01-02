@@ -18,17 +18,20 @@ export default function UserGameFeedScreen() {
         const loadUserGames = async () => {
             if (!userId) return;
             try {
+                // Fetch games for the specific user
                 const userGames = await GameStorageService.getUserGames(userId);
-                // Sort descending by created_at usually, or how they are sorted in profile?
-                // Profile seems to just list them. We'll use the order returned.
-                setGames(userGames);
 
+                let startIndex = 0;
                 if (initialGameId) {
                     const index = userGames.findIndex(g => g.id === initialGameId);
                     if (index !== -1) {
-                        setInitialIndex(index);
+                        startIndex = index;
                     }
                 }
+
+                // Set state in one go if possible, or order doesn't matter too much if we handle loading
+                setGames(userGames);
+                setInitialIndex(startIndex);
             } catch (error) {
                 console.error("Failed to load user games", error);
             } finally {
@@ -64,6 +67,11 @@ export default function UserGameFeedScreen() {
 
     return (
         <View style={styles.container}>
+            {/* 
+                Key fix: We pass the filtered user games list here. 
+                GameFeedList will handle rendering them.
+                We must ensure initialIndex is passed correctly.
+            */}
             <GameFeedList games={games} initialIndex={initialIndex} />
 
             <SafeAreaView style={styles.overlay}>

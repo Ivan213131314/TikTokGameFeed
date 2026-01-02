@@ -100,7 +100,7 @@ export default function ProfileScreen() {
             if (result.assets && result.assets.length > 0) {
                 const file = result.assets[0];
                 await GameStorageService.addGame(file.name, file.uri);
-                await loadGames();
+                await loadGames(true);
             }
         } catch (err) {
             console.error("Error picking file:", err);
@@ -169,7 +169,7 @@ export default function ProfileScreen() {
                     style: "destructive",
                     onPress: async () => {
                         await GameStorageService.deleteGame(selectedGame.id);
-                        await loadGames();
+                        await loadGames(true);
                     }
                 }
             ]

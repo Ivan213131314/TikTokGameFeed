@@ -7,6 +7,7 @@ import { GameStorageService } from '../services/GameStorageService';
 import { GameStats } from '../types/SocialModels';
 import { router } from 'expo-router';
 import { getAvatarSource } from '../constants/Avatars';
+import { supabase } from '../../lib/supabase';
 
 interface InteractionSidebarProps {
     game: GameModel;
@@ -69,20 +70,30 @@ export const InteractionSidebar: React.FC<InteractionSidebarProps> = ({ game, on
         }
     };
 
-    const handleProfilePress = () => {
-        router.push(`/user/${game.user_id}`);
+    const handleProfilePress = async () => {
+        if (!game.user_id) return;
+
+        // Check if current user is the author
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.id === game.user_id) {
+            router.navigate('/(tabs)/profile');
+        } else {
+            router.push(`/user/${game.user_id}`);
+        }
     };
 
     return (
         <View style={styles.container}>
-            <TouchableOpacity style={styles.actionButton} onPress={handleProfilePress}>
-                <View style={styles.avatarContainer}>
-                    <Image
-                        source={getAvatarSource(userAvatar || 'https://placehold.co/100x100/png')}
-                        style={styles.avatar}
-                        contentFit="cover"
-                        cachePolicy="disk"
-                    />
+            <TouchableOpacity style={styles.profileContainer} onPress={handleProfilePress}>
+                {userAvatar ? (
+                    <Image source={getAvatarSource(userAvatar)} style={styles.avatar} />
+                ) : (
+                    <View style={styles.avatarPlaceholder}>
+                        <Ionicons name="person" size={24} color="white" />
+                    </View>
+                )}
+                <View style={styles.plusBadge}>
+                    <Ionicons name="add" size={12} color="white" />
                 </View>
             </TouchableOpacity>
 
@@ -134,4 +145,31 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: 'white',
     },
+    // Added missing styles
+    profileContainer: {
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    avatarPlaceholder: {
+        width: 45,
+        height: 45,
+        borderRadius: 25,
+        backgroundColor: '#333',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'white',
+    },
+    plusBadge: {
+        position: 'absolute',
+        bottom: -5,
+        backgroundColor: '#FE2C55',
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'white',
+    }
 });

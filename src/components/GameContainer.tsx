@@ -45,24 +45,28 @@ export const GameContainer: React.FC<GameContainerProps> = ({ game, isActive, on
 
     return (
         <View style={styles.container} {...panResponder.panHandlers}>
-            <WebView
-                source={game.html_content ? { html: game.html_content } : { uri: game.uri }}
-                style={styles.webview}
-                scrollEnabled={false}
-                originWhitelist={['*']}
-                javaScriptEnabled={true}
-                domStorageEnabled={true}
-                allowsInlineMediaPlayback={true}
-                mediaPlaybackRequiresUserAction={false}
-                androidHardwareAccelerationDisabled={false}
-                // Cleanup injection as we use native handling now
-                renderError={(e) => (
-                    <View style={styles.errorContainer}>
-                        <Text style={styles.errorText}>Failed to load game</Text>
-                        <Text style={styles.errorText}>{e}</Text>
-                    </View>
-                )}
-            />
+            {isActive ? (
+                <WebView
+                    source={game.html_content ? { html: game.html_content } : { uri: game.uri }}
+                    style={styles.webview}
+                    scrollEnabled={false}
+                    originWhitelist={['*']}
+                    javaScriptEnabled={true}
+                    domStorageEnabled={true}
+                    allowsInlineMediaPlayback={true}
+                    mediaPlaybackRequiresUserAction={false}
+                    androidHardwareAccelerationDisabled={false}
+                    // Cleanup injection as we use native handling now
+                    renderError={(e) => (
+                        <View style={styles.errorContainer}>
+                            <Text style={styles.errorText}>Failed to load game</Text>
+                            <Text style={styles.errorText}>{e}</Text>
+                        </View>
+                    )}
+                />
+            ) : (
+                <View style={[styles.webview, { backgroundColor: 'black' }]} />
+            )}
 
             <View style={styles.sidebar} pointerEvents="box-none">
                 <InteractionSidebar

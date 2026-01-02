@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, FlatList, TouchableOpacity, SafeAreaView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Dimensions } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, Stack, router } from 'expo-router';
 import { GameStorageService } from '../../src/services/GameStorageService';
 import { ProfileModel } from '../../src/types/SocialModels';
@@ -8,9 +9,23 @@ import { Colors } from '../../src/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 
+import { getAvatarSource } from '../../src/constants/Avatars';
+import { GAME_ICONS } from '../../assets/game-icons';
+
+import { supabase } from '../../lib/supabase';
+
 const { width } = Dimensions.get('window');
 const COLUMN_COUNT = 3;
 const ITEM_WIDTH = width / COLUMN_COUNT;
+
+const getIconIndex = (id: string, count: number) => {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+        hash = ((hash << 5) - hash) + id.charCodeAt(i);
+        hash |= 0; // Convert to 32bit integer
+    }
+    return Math.abs(hash) % count;
+};
 
 export default function UserProfileScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -40,17 +55,43 @@ export default function UserProfileScreen() {
         }
     };
 
-    const renderGameItem = ({ item }: { item: GameModel }) => (
-        <TouchableOpacity style={styles.gameItem} onPress={() => { /* Navigate to feed starting at this game? For now just alert */ alert('Opening game not implemented yet from grid'); }}>
-            <View style={styles.gamePreview}>
-                {/* Expensive to render many WebViews, but for now we use a placeholder or simplified view */}
-                <View style={styles.placeholderPreview}>
-                    <Ionicons name="game-controller" size={30} color="#555" />
+    const renderGameItem = ({ item }: { item: GameModel }) => {
+        const iconKey = item.icon_asset_key;
+        let iconSource;
+        if (iconKey && iconKey.startsWith('game_icon_')) {
+            const index = parseInt(iconKey.replace('game_icon_', ''), 10);
+            if (!isNaN(index) && index >= 0 && index < GAME_ICONS.length) {
+                iconSource = GAME_ICONS[index];
+            }
+        }
+
+        if (!iconSource) {
+            iconSource = GAME_ICONS[getIconIndex(item.id, GAME_ICONS.length)];
+        }
+
+        return (
+            <TouchableOpacity
+                style={styles.gameItem}
+                onPress={() => {
+                    router.push({
+                        pathname: '/game-feed',
+                        params: { userId: id, initialGameId: item.id }
+                    });
+                }}
+            >
+                <View style={styles.gridIconContainer}>
+                    <Image
+                        source={iconSource}
+                        style={styles.gridIconImage}
+                        contentFit="contain"
+                    />
+                    <View style={styles.gridOverlay} />
+                    <Ionicons name="play" size={20} color="white" style={styles.playIcon} />
                 </View>
-            </View>
-            <Text style={styles.gameTitle} numberOfLines={1}>{item.name}</Text>
-        </TouchableOpacity>
-    );
+                <Text style={styles.gameTitle} numberOfLines={1}>{item.name}</Text>
+            </TouchableOpacity>
+        );
+    };
 
     if (loading) {
         return (
@@ -75,15 +116,14 @@ export default function UserProfileScreen() {
                 headerTitle: profile.username || 'Profile',
                 headerStyle: { backgroundColor: 'black' },
                 headerTintColor: 'white',
-                headerBackTitleVisible: false,
             }} />
 
             <View style={styles.header}>
                 <Image
-                    source={{ uri: profile.avatar_url || 'https://placehold.co/100x100/png' }}
+                    source={getAvatarSource(profile.avatar_url)}
                     style={styles.avatar}
                 />
-                <Text style={styles.username}>@{profile.username}</Text>
+                <Text style={styles.username}>@{profile.username || 'User'}</Text>
                 <View style={styles.statsRow}>
                     <View style={styles.stat}>
                         <Text style={styles.statValue}>{games.length}</Text>
@@ -174,19 +214,6 @@ const styles = StyleSheet.create({
         // borderWidth: 1,
         // borderColor: 'black',
     },
-    gamePreview: {
-        flex: 1,
-        backgroundColor: '#222',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    placeholderPreview: {
-        width: '100%',
-        height: '100%',
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#1a1a1a',
-    },
     gameTitle: {
         position: 'absolute',
         bottom: 5,
@@ -195,5 +222,25 @@ const styles = StyleSheet.create({
         fontSize: 10,
         textShadowColor: 'black',
         textShadowRadius: 2,
-    }
+    },
+    gridIconContainer: {
+        flex: 1,
+        backgroundColor: '#2A2A2A',
+        position: 'relative',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    gridIconImage: {
+        width: '70%',
+        height: '70%',
+        resizeMode: 'contain',
+    },
+    gridOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.2)',
+    },
+    playIcon: {
+        position: 'absolute',
+        opacity: 0.8,
+    },
 });
