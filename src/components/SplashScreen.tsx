@@ -4,11 +4,12 @@ import { Colors } from '../constants/Colors';
 
 interface SplashScreenProps {
     onFinish: () => void;
+    onReady?: () => void;
 }
 
 const { width, height } = Dimensions.get('window');
 
-export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
+export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish, onReady }) => {
     // Animation Values
     const opacityAnim = useRef(new Animated.Value(0)).current;
     const scaleAnim = useRef(new Animated.Value(0.8)).current; // For initial entry and pulse
@@ -35,7 +36,9 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
                 friction: 6,
                 useNativeDriver: true,
             }),
-        ]).start();
+        ]).start(() => {
+            if (onReady) onReady();
+        });
 
         // 2. Heartbeat Pulse Loop
         const pulse = Animated.loop(
