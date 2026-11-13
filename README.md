@@ -2,6 +2,11 @@
 
 A mobile app that serves an endless, swipeable feed of casual HTML5 games, in the style of TikTok. Swipe up to jump to the next game, play instantly, like, comment, and upload your own.
 
+
+https://github.com/user-attachments/assets/75d932af-917e-4123-a5e2-2c347ca40109
+
+
+
 ## Features
 
 - **Vertical game feed**: full-screen pager with instant play, randomized game order.
